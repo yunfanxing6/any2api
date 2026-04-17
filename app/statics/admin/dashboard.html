@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Any2API - 运行总览</title>
+  <link rel="icon" href="/favicon.ico?v={{APP_VERSION}}">
+  <link href="https://cdn.jsdelivr.net/npm/geist@1.0.0/dist/fonts/geist-sans/style.css" rel="stylesheet">
+  <link href="/static/css/app.css?v={{APP_VERSION}}" rel="stylesheet">
+  <style>
+    body { background:#faf9f5; }
+    .page-hd { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:20px; }
+    .page-title { font-size:22px; font-weight:700; line-height:1.2; }
+    .page-sub { font-size:13px; color:var(--fg-muted); margin-top:5px; }
+    .page-action-btn { height:32px; padding:0 14px; border-radius:999px; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size:13px; font-weight:600; border:1px solid #e6e6e6; background:#fafafa; color:#444; }
+    .page-action-btn:hover { background:#f3f3f3; border-color:#dcdcdc }
+    .stat-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:18px; }
+    .card { background:#fff; border-radius:14px; padding:18px; margin-bottom:16px; }
+    .stat-cell { background:#fff; border-radius:12px; padding:16px; min-height:96px; }
+    .stat-label { font-size:11px; color:#8a8a8a; text-transform:uppercase; letter-spacing:.04em; }
+    .stat-num { font-size:26px; font-weight:700; margin-top:16px; }
+    .panel-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+    .meta-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+    .meta-item { border:1px solid #f0ebe2; border-radius:10px; padding:12px; font-size:13px; }
+    .meta-item strong { display:block; font-size:12px; color:#8a8a8a; margin-bottom:6px; }
+    .muted { color:#8a8a8a; font-size:12px; }
+    .endpoint-list { display:grid; gap:10px; }
+    .endpoint-item { display:flex; align-items:center; justify-content:space-between; gap:12px; border:1px solid #f0ebe2; border-radius:10px; padding:12px; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background:#f5f5f5; padding:2px 6px; border-radius:999px; }
+    @media (max-width: 960px) {
+      .stat-grid, .panel-grid, .meta-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    }
+    @media (max-width: 720px) {
+      .stat-grid, .panel-grid, .meta-grid { grid-template-columns:1fr; }
+      .page-hd { flex-direction:column; }
+    }
+  </style>
+</head>
+<body>
+<div id="admin-header" data-active="/admin/dashboard"></div>
+<main class="admin-main">
+  <div class="page-hd">
+    <div>
+      <div class="page-title">运行总览</div>
+      <div class="page-sub">统一查看 Any2API 的 Grok / Qwen provider 状态、账号池健康和可用接口。</div>
+    </div>
+    <button type="button" class="page-action-btn" id="btn-refresh">刷新</button>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat-cell"><div class="stat-label">Grok Tokens</div><div class="stat-num" id="grok-total">0</div></div>
+    <div class="stat-cell"><div class="stat-label">Grok Active</div><div class="stat-num" id="grok-active" style="color:#1f8f4a">0</div></div>
+    <div class="stat-cell"><div class="stat-label">Qwen Accounts</div><div class="stat-num" id="qwen-total">0</div></div>
+    <div class="stat-cell"><div class="stat-label">Qwen Ready</div><div class="stat-num" id="qwen-ready" style="color:#2563eb">0</div></div>
+  </div>
+
+  <div class="panel-grid">
+    <section class="card">
+      <div class="page-title" style="font-size:16px;margin-bottom:14px;">Grok 运行态</div>
+      <div class="meta-grid">
+        <div class="meta-item"><strong>目录状态</strong><span id="grok-directory">-</span></div>
+        <div class="meta-item"><strong>目录 Revision</strong><span id="grok-revision">-</span></div>
+        <div class="meta-item"><strong>Auto 配额余量</strong><span id="grok-auto">0</span></div>
+        <div class="meta-item"><strong>Fast 配额余量</strong><span id="grok-fast">0</span></div>
+        <div class="meta-item"><strong>Expert 配额余量</strong><span id="grok-expert">0</span></div>
+        <div class="meta-item"><strong>Heavy 配额余量</strong><span id="grok-heavy">0</span></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="page-title" style="font-size:16px;margin-bottom:14px;">Qwen 运行态</div>
+      <div class="meta-grid">
+        <div class="meta-item"><strong>Engine Mode</strong><span id="qwen-engine">-</span></div>
+        <div class="meta-item"><strong>Browser Engine</strong><span id="qwen-browser">-</span></div>
+        <div class="meta-item"><strong>HTTPX Engine</strong><span id="qwen-httpx">-</span></div>
+        <div class="meta-item"><strong>等待队列</strong><span id="qwen-waiting">0</span></div>
+        <div class="meta-item"><strong>待激活</strong><span id="qwen-pending">0</span></div>
+        <div class="meta-item"><strong>限流/失效</strong><span id="qwen-invalid">0</span></div>
+      </div>
+    </section>
+  </div>
+
+  <section class="card">
+    <div class="page-title" style="font-size:16px;margin-bottom:14px;">统一接口</div>
+    <div class="endpoint-list">
+      <div class="endpoint-item"><span><code>POST /v1/chat/completions</code></span><span class="muted">Grok / Qwen 文本与多模态入口</span></div>
+      <div class="endpoint-item"><span><code>POST /v1/images/generations</code></span><span class="muted">Grok / Qwen 图片生成入口</span></div>
+      <div class="endpoint-item"><span><code>GET /v1/models</code></span><span class="muted">统一模型目录，包含 Grok 和 Qwen</span></div>
+      <div class="endpoint-item"><span><code>GET /admin/api/qwen/status</code></span><span class="muted">Qwen provider 运行状态</span></div>
+    </div>
+  </section>
+</main>
+<script src="/static/js/i18n.js?v={{APP_VERSION}}"></script>
+<script src="/static/js/auth.js?v={{APP_VERSION}}"></script>
+<script src="/static/js/admin-header.js?v={{APP_VERSION}}"></script>
+<script src="/static/js/toast.js?v={{APP_VERSION}}"></script>
+<script src="/static/js/footer.js?v={{APP_VERSION}}"></script>
+<script>
+async function api(path) {
+  const key = await adminKey.get();
+  const res = await fetch(ADMIN_API + path, { headers: { Authorization: `Bearer ${key}` } });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+function sumQuota(items, mode) {
+  return (items || []).reduce((sum, item) => sum + Number(item?.quota?.[mode]?.remaining || 0), 0);
+}
+
+async function loadDashboard() {
+  const [runtime, tokensData, qwenStatus] = await Promise.all([
+    api('/status'),
+    api('/tokens'),
+    api('/qwen/status').catch(() => ({ accounts: {}, engine_mode: '-', browser_engine: null, httpx_engine: null })),
+  ]);
+
+  const tokens = tokensData.tokens || [];
+  const active = tokens.filter((item) => item.status === 'active').length;
+  document.getElementById('grok-total').textContent = String(tokens.length);
+  document.getElementById('grok-active').textContent = String(active);
+  document.getElementById('grok-directory').textContent = runtime.status || 'ok';
+  document.getElementById('grok-revision').textContent = String(runtime.revision || 0);
+  document.getElementById('grok-auto').textContent = String(sumQuota(tokens, 'auto'));
+  document.getElementById('grok-fast').textContent = String(sumQuota(tokens, 'fast'));
+  document.getElementById('grok-expert').textContent = String(sumQuota(tokens, 'expert'));
+  document.getElementById('grok-heavy').textContent = String(sumQuota(tokens, 'heavy'));
+
+  const accounts = qwenStatus.accounts || {};
+  document.getElementById('qwen-total').textContent = String(accounts.total || 0);
+  document.getElementById('qwen-ready').textContent = String(accounts.valid || 0);
+  document.getElementById('qwen-engine').textContent = qwenStatus.engine_mode || '-';
+  document.getElementById('qwen-browser').textContent = qwenStatus.browser_engine?.started ? `started · pool=${qwenStatus.browser_engine.pool_size}` : 'stopped';
+  document.getElementById('qwen-httpx').textContent = qwenStatus.httpx_engine?.started ? 'started' : 'stopped';
+  document.getElementById('qwen-waiting').textContent = String(accounts.waiting || 0);
+  document.getElementById('qwen-pending').textContent = String(accounts.activation_pending || 0);
+  document.getElementById('qwen-invalid').textContent = `${accounts.rate_limited || 0} / ${accounts.invalid || 0}`;
+}
+
+(async () => {
+  await renderAdminHeader?.();
+  await renderSiteFooter?.();
+  const key = await adminKey.get();
+  if (!key || !await verifyKey(ADMIN_API + '/verify', key).catch(() => false)) return location.href = '/admin/login';
+  document.getElementById('btn-refresh').addEventListener('click', () => loadDashboard().catch((e) => showToast(`刷新失败: ${e.message}`, 'error')));
+  await loadDashboard().catch((e) => showToast(`加载失败: ${e.message}`, 'error'));
+})();
+</script>
+</body>
+</html>

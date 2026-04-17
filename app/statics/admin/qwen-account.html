@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Any2API - Qwen 账户管理</title>
+  <link rel="icon" href="/favicon.ico?v={{APP_VERSION}}">
+  <link href="https://cdn.jsdelivr.net/npm/geist@1.0.0/dist/fonts/geist-sans/style.css" rel="stylesheet">
+  <link href="/static/css/app.css?v={{APP_VERSION}}" rel="stylesheet">
+  <style>
+    body { background:#faf9f5; }
+    .page-hd { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:20px; }
+    .page-title { font-size:22px; font-weight:700; line-height:1.2; }
+    .page-sub { font-size:13px; color:var(--fg-muted); margin-top:5px; }
+    .page-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .page-action-btn {
+      height:32px; padding:0 14px; border-radius:999px; display:inline-flex; align-items:center; gap:6px;
+      font-size:13px; font-weight:600; border:1px solid #e6e6e6; background:#fafafa; color:#444;
+    }
+    .page-action-btn:hover { background:#f3f3f3; border-color:#dcdcdc; }
+    .page-action-btn-primary { background:#111; border-color:#111; color:#fff; }
+    .page-action-btn-primary:hover { background:#222; border-color:#222; }
+    .stat-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:12px; margin-bottom:18px; }
+    .stat-cell { background:#fff; border-radius:12px; padding:14px 16px; min-height:86px; }
+    .stat-label { font-size:11px; color:#8a8a8a; }
+    .stat-num { font-size:22px; font-weight:700; margin-top:16px; }
+    .card { background:#fff; border-radius:12px; padding:18px; margin-bottom:16px; }
+    .card-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
+    .card-title { font-size:14px; font-weight:700; }
+    .meta-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+    .meta-item { border:1px solid #f0ebe2; border-radius:10px; padding:12px; font-size:13px; }
+    .meta-item strong { display:block; font-size:12px; color:#8a8a8a; margin-bottom:6px; font-weight:600; }
+    .form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+    .field { display:flex; flex-direction:column; gap:6px; }
+    .field.full { grid-column:1 / -1; }
+    .field label { font-size:12px; color:#666; font-weight:600; }
+    .field textarea { min-height:88px; resize:vertical; }
+    .table-wrap { overflow:auto; }
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    th, td { padding:12px 10px; text-align:left; border-bottom:1px solid #f0ebe2; vertical-align:top; }
+    th { font-size:12px; color:#8a8a8a; font-weight:600; white-space:nowrap; }
+    td code { font-size:12px; background:#f5f5f5; padding:2px 6px; border-radius:999px; }
+    .status-pill { display:inline-flex; align-items:center; justify-content:center; min-width:72px; height:24px; padding:0 10px; border-radius:999px; font-size:12px; font-weight:600; }
+    .status-valid { background:#e7f7ec; color:#1f8f4a; }
+    .status-pending_activation { background:#fff6e8; color:#c77812; }
+    .status-rate_limited { background:#fff3ec; color:#dd6b20; }
+    .status-banned, .status-auth_error, .status-invalid { background:#fdecec; color:#c53030; }
+    .action-row { display:flex; gap:8px; flex-wrap:wrap; }
+    .btn-xs { height:28px; padding:0 10px; border-radius:999px; border:1px solid #e6e6e6; background:#fafafa; font-size:12px; font-weight:600; }
+    .btn-xs:hover { background:#f3f3f3; }
+    .btn-xs-danger { color:#b42318; }
+    .muted { color:#8a8a8a; font-size:12px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    @media (max-width: 1100px) {
+      .stat-grid, .meta-grid, .form-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    }
+    @media (max-width: 720px) {
+      .page-hd { flex-direction:column; }
+      .stat-grid, .meta-grid, .form-grid { grid-template-columns:1fr; }
+    }
+  </style>
+</head>
+<body>
+<div id="admin-header" data-active="/admin/qwen-account"></div>
+
+<main class="admin-main">
+  <div class="page-hd">
+    <div>
+      <div class="page-title">Qwen 账户管理</div>
+      <div class="page-sub">管理嵌入式 Qwen provider 的账号池、激活状态与运行时健康。</div>
+    </div>
+    <div class="page-actions">
+      <button type="button" class="page-action-btn" id="btn-refresh">刷新</button>
+      <button type="button" class="page-action-btn" id="btn-verify-all">验证全部</button>
+      <button type="button" class="page-action-btn page-action-btn-primary" id="btn-toggle-form">新增 Qwen 账号</button>
+    </div>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat-cell"><div class="stat-label">账户总数</div><div class="stat-num" id="s-total">0</div></div>
+    <div class="stat-cell"><div class="stat-label">正常</div><div class="stat-num" id="s-valid" style="color:#1f8f4a">0</div></div>
+    <div class="stat-cell"><div class="stat-label">待激活</div><div class="stat-num" id="s-pending" style="color:#c77812">0</div></div>
+    <div class="stat-cell"><div class="stat-label">限流</div><div class="stat-num" id="s-rate" style="color:#dd6b20">0</div></div>
+    <div class="stat-cell"><div class="stat-label">异常/封禁</div><div class="stat-num" id="s-invalid" style="color:#c53030">0</div></div>
+  </div>
+
+  <section class="card">
+    <div class="card-head">
+      <div class="card-title">运行状态</div>
+      <div class="muted" id="status-summary">加载中...</div>
+    </div>
+    <div class="meta-grid">
+      <div class="meta-item"><strong>Engine Mode</strong><span id="meta-engine">-</span></div>
+      <div class="meta-item"><strong>Browser Engine</strong><span id="meta-browser">-</span></div>
+      <div class="meta-item"><strong>HTTPX Engine</strong><span id="meta-httpx">-</span></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <div class="card-title">一键获取新号</div>
+      <div class="muted">对应 qwen2API 原后台的自动注册能力。先验证 `register secret`，再执行自动注册。</div>
+    </div>
+    <div class="form-grid">
+      <div class="field full">
+        <label for="register-secret">Register Secret</label>
+        <input id="register-secret" class="input" placeholder="输入在配置管理里设置的 providers.qwen.register_secret">
+      </div>
+    </div>
+    <div class="page-actions" style="margin-top:14px">
+      <button type="button" class="page-action-btn" id="btn-register-verify">验证注册密钥</button>
+      <button type="button" class="page-action-btn page-action-btn-primary" id="btn-register-account" disabled>一键获取新号</button>
+      <span class="muted" id="register-status">未验证</span>
+    </div>
+  </section>
+
+  <section class="card" id="add-form-card" style="display:none">
+    <div class="card-head">
+      <div class="card-title">新增 Qwen 账号</div>
+      <div class="muted">默认只需要 Qwen token。支持一行一个批量导入；邮箱/密码/用户名/Cookies 仅作为高级可选项。</div>
+    </div>
+    <div class="form-grid">
+      <div class="field full">
+        <label for="account-token">Token</label>
+        <textarea id="account-token" class="input mono" placeholder="请输入 Qwen Access Token，支持一行一个批量导入"></textarea>
+        <div class="muted">最简单的方式就是只粘贴 token，其他字段都可以不填。</div>
+      </div>
+      <div class="field full">
+        <details id="advanced-fields" class="muted">
+          <summary style="cursor:pointer;font-weight:600;color:#666;">高级字段（可选）</summary>
+          <div class="form-grid" style="margin-top:12px;">
+            <div class="field">
+              <label for="account-email">Email</label>
+              <input id="account-email" class="input" placeholder="可选">
+            </div>
+            <div class="field">
+              <label for="account-password">Password</label>
+              <input id="account-password" class="input" placeholder="可选">
+            </div>
+            <div class="field">
+              <label for="account-username">Username</label>
+              <input id="account-username" class="input" placeholder="可选">
+            </div>
+            <div class="field">
+              <label for="account-cookies">Cookies</label>
+              <input id="account-cookies" class="input" placeholder="可选">
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+    <div class="page-actions" style="margin-top:14px">
+      <button type="button" class="page-action-btn page-action-btn-primary" id="btn-add-account">保存</button>
+      <button type="button" class="page-action-btn" id="btn-cancel-form">取消</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <div class="card-title">账号列表</div>
+      <div class="muted" id="account-count">0 条</div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Username</th>
+            <th>Token</th>
+            <th>状态</th>
+            <th>Inflight</th>
+            <th>错误信息</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="accounts-body">
+          <tr><td colspan="7" class="muted">加载中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script src="/static/js/i18n.js?v={{APP_VERSION}}"></script>
+<script src="/static/js/auth.js?v={{APP_VERSION}}"></script>
+<script src="/static/js/admin-header.js?v={{APP_VERSION}}"></script>
+<script src="/static/js/toast.js?v={{APP_VERSION}}"></script>
+<script src="/static/js/footer.js?v={{APP_VERSION}}"></script>
+<script>
+const QWEN_API = '/admin/api/qwen';
+let qwenAccounts = [];
+let qwenStatus = {};
+let registerUnlocked = false;
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function maskToken(token) {
+  const value = String(token || '');
+  if (value.length <= 16) return value;
+  return `${value.slice(0, 8)}...${value.slice(-8)}`;
+}
+
+function statusClass(code) {
+  return `status-pill status-${code || 'invalid'}`;
+}
+
+async function api(method, path, body) {
+  const key = await adminKey.get();
+  const response = await fetch(QWEN_API + path, {
+    method,
+    headers: {
+      ...(body != null ? { 'Content-Type': 'application/json' } : {}),
+      Authorization: `Bearer ${key}`,
+    },
+    ...(body != null ? { body: JSON.stringify(body) } : {}),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.detail || payload.error || response.statusText || String(response.status));
+  return payload;
+}
+
+function setStats(summary) {
+  const accounts = summary.accounts || {};
+  document.getElementById('s-total').textContent = accounts.total || 0;
+  document.getElementById('s-valid').textContent = accounts.valid || 0;
+  document.getElementById('s-pending').textContent = accounts.activation_pending || 0;
+  document.getElementById('s-rate').textContent = accounts.rate_limited || 0;
+  document.getElementById('s-invalid').textContent = (accounts.invalid || 0) + (accounts.banned || 0);
+  document.getElementById('status-summary').textContent = `max_inflight=${accounts.max_inflight || 0} · waiting=${accounts.waiting || 0}`;
+  document.getElementById('meta-engine').textContent = summary.engine_mode || '-';
+  document.getElementById('meta-browser').textContent = summary.browser_engine?.started ? `started · pool=${summary.browser_engine.pool_size}` : 'stopped';
+  document.getElementById('meta-httpx').textContent = summary.httpx_engine?.started ? 'started' : 'stopped';
+}
+
+function renderAccounts() {
+  const body = document.getElementById('accounts-body');
+  document.getElementById('account-count').textContent = `${qwenAccounts.length} 条`;
+  if (!qwenAccounts.length) {
+    body.innerHTML = '<tr><td colspan="7" class="muted">暂无 Qwen 账号</td></tr>';
+    return;
+  }
+  body.innerHTML = qwenAccounts.map((item) => {
+    const email = escapeHtml(item.email || '-');
+    const username = escapeHtml(item.username || '-');
+    const token = escapeHtml(maskToken(item.token));
+    const statusCode = escapeHtml(item.status_code || 'unknown');
+    const statusText = escapeHtml(item.status_text || statusCode);
+    const inflight = Number(item.inflight || 0);
+    const lastError = escapeHtml(item.last_error || '-');
+    const encodedEmail = encodeURIComponent(item.email || '');
+    const canActivate = item.status_code === 'pending_activation' || item.activation_pending;
+    return `
+      <tr>
+        <td>${email}</td>
+        <td>${username}</td>
+        <td><code class="mono">${token}</code></td>
+        <td><span class="${statusClass(statusCode)}">${statusText}</span></td>
+        <td>${inflight}</td>
+        <td class="muted">${lastError}</td>
+        <td>
+          <div class="action-row">
+            <button class="btn-xs" onclick="verifyAccount('${encodedEmail}')">验证</button>
+            ${canActivate ? `<button class="btn-xs" onclick="activateAccount('${encodedEmail}')">激活</button>` : ''}
+            <button class="btn-xs btn-xs-danger" onclick="deleteAccount('${encodedEmail}')">删除</button>
+          </div>
+        </td>
+      </tr>`;
+  }).join('');
+}
+
+async function load() {
+  try {
+    const [status, accounts] = await Promise.all([
+      api('GET', '/status'),
+      api('GET', '/accounts'),
+    ]);
+    qwenStatus = status || {};
+    qwenAccounts = Array.isArray(accounts.accounts) ? accounts.accounts : [];
+    setStats(qwenStatus);
+    renderAccounts();
+  } catch (error) {
+    showToast(`加载 Qwen 管理数据失败: ${error.message}`, 'error');
+    document.getElementById('accounts-body').innerHTML = `<tr><td colspan="7" class="muted">${escapeHtml(error.message)}</td></tr>`;
+  }
+}
+
+function toggleForm(show) {
+  document.getElementById('add-form-card').style.display = show ? '' : 'none';
+}
+
+async function addAccount() {
+  const tokens = document.getElementById('account-token').value
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (!tokens.length) {
+    showToast('请输入至少一个 Qwen Token', 'error');
+    return;
+  }
+  const email = document.getElementById('account-email').value.trim();
+  const password = document.getElementById('account-password').value.trim();
+  const username = document.getElementById('account-username').value.trim();
+  const cookies = document.getElementById('account-cookies').value.trim();
+  if (tokens.length > 1 && (email || password || username || cookies)) {
+    showToast('批量导入时将忽略高级字段，只按 token 逐个添加。', 'info');
+  }
+  try {
+    showToast(tokens.length > 1 ? `正在批量导入 ${tokens.length} 个 Qwen token...` : '正在保存 Qwen 账号...', 'info');
+    let success = 0;
+    const failures = [];
+    for (const token of tokens) {
+      try {
+        await api('POST', '/accounts', {
+          token,
+          email: tokens.length === 1 ? email : '',
+          password: tokens.length === 1 ? password : '',
+          username: tokens.length === 1 ? username : '',
+          cookies: tokens.length === 1 ? cookies : '',
+        });
+        success += 1;
+      } catch (error) {
+        failures.push(error.message);
+      }
+    }
+    toggleForm(false);
+    document.getElementById('advanced-fields').open = false;
+    ['account-token', 'account-email', 'account-password', 'account-username', 'account-cookies'].forEach((id) => { document.getElementById(id).value = ''; });
+    if (!failures.length) {
+      showToast(tokens.length > 1 ? `批量导入完成，成功 ${success} 个` : 'Qwen 账号已保存', 'success');
+    } else if (success > 0) {
+      showToast(`部分导入成功：成功 ${success} 个，失败 ${failures.length} 个`, 'info');
+    } else {
+      throw new Error(failures[0] || '导入失败');
+    }
+    await load();
+  } catch (error) {
+    showToast(`保存失败: ${error.message}`, 'error');
+  }
+}
+
+function setRegisterState(ok, message) {
+  registerUnlocked = !!ok;
+  document.getElementById('btn-register-account').disabled = !registerUnlocked;
+  document.getElementById('register-status').textContent = message || (registerUnlocked ? '已验证' : '未验证');
+}
+
+async function verifyRegisterSecret() {
+  const secret = document.getElementById('register-secret').value.trim();
+  if (!secret) {
+    showToast('请输入 register secret', 'error');
+    return;
+  }
+  try {
+    const result = await api('POST', '/accounts/register-verify', { secret });
+    if (result.ok) {
+      setRegisterState(true, '已验证，可执行自动注册');
+      showToast('register secret 验证通过', 'success');
+    } else {
+      setRegisterState(false, '验证失败');
+      showToast('register secret 验证失败', 'error');
+    }
+  } catch (error) {
+    setRegisterState(false, '验证失败');
+    showToast(`验证失败: ${error.message}`, 'error');
+  }
+}
+
+async function autoRegisterAccount() {
+  if (!registerUnlocked) {
+    showToast('请先验证 register secret', 'error');
+    return;
+  }
+  try {
+    showToast('正在自动注册新的 Qwen 账号...', 'info');
+    const result = await api('POST', '/accounts/register', { secret: document.getElementById('register-secret').value.trim() });
+    if (result.ok || result.activation_pending) {
+      showToast(result.message || result.email || '自动注册已执行', 'success');
+      await load();
+      return;
+    }
+    throw new Error(result.error || '自动注册失败');
+  } catch (error) {
+    showToast(`自动注册失败: ${error.message}`, 'error');
+  }
+}
+
+async function verifyAll() {
+  try {
+    showToast('正在验证全部 Qwen 账号...', 'info');
+    await api('POST', '/verify', {});
+    showToast('Qwen 账号验证完成', 'success');
+    await load();
+  } catch (error) {
+    showToast(`验证失败: ${error.message}`, 'error');
+  }
+}
+
+async function verifyAccount(encodedEmail) {
+  try {
+    await api('POST', `/accounts/${encodedEmail}/verify`, {});
+    showToast('账号验证完成', 'success');
+    await load();
+  } catch (error) {
+    showToast(`验证失败: ${error.message}`, 'error');
+  }
+}
+
+async function activateAccount(encodedEmail) {
+  try {
+    await api('POST', `/accounts/${encodedEmail}/activate`, {});
+    showToast('账号激活请求已执行', 'success');
+    await load();
+  } catch (error) {
+    showToast(`激活失败: ${error.message}`, 'error');
+  }
+}
+
+async function deleteAccount(encodedEmail) {
+  if (!confirm('确认删除这个 Qwen 账号？')) return;
+  try {
+    await api('DELETE', `/accounts/${encodedEmail}`);
+    showToast('账号已删除', 'success');
+    await load();
+  } catch (error) {
+    showToast(`删除失败: ${error.message}`, 'error');
+  }
+}
+
+(async () => {
+  await renderAdminHeader?.();
+  await renderSiteFooter?.();
+  const key = await adminKey.get();
+  if (!key || !await verifyKey('/admin/api/verify', key).catch(() => false)) {
+    location.href = '/admin/login';
+    return;
+  }
+  document.getElementById('btn-refresh').addEventListener('click', load);
+  document.getElementById('btn-verify-all').addEventListener('click', verifyAll);
+  document.getElementById('btn-toggle-form').addEventListener('click', () => toggleForm(true));
+  document.getElementById('btn-cancel-form').addEventListener('click', () => toggleForm(false));
+  document.getElementById('btn-add-account').addEventListener('click', addAccount);
+  document.getElementById('btn-register-verify').addEventListener('click', verifyRegisterSecret);
+  document.getElementById('btn-register-account').addEventListener('click', autoRegisterAccount);
+  await load();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Any2API - 诊断</title>
+  <link rel="icon" href="/favicon.ico?v={{APP_VERSION}}">
+  <link href="https://cdn.jsdelivr.net/npm/geist@1.0.0/dist/fonts/geist-sans/style.css" rel="stylesheet">
+  <link href="/static/css/app.css?v={{APP_VERSION}}" rel="stylesheet">
+  <style>
+    body { background:#faf9f5; }
+    .page-hd { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:20px; }
+    .page-title { font-size:22px; font-weight:700; }
+    .page-sub { font-size:13px; color:var(--fg-muted); margin-top:5px; }
+    .btn { height:32px; padding:0 14px; border-radius:999px; border:1px solid #e6e6e6; background:#fafafa; font-size:13px; font-weight:600; }
+    .btn:hover { background:#f3f3f3; }
+    .card { background:#fff; border-radius:14px; padding:18px; margin-bottom:16px; }
+    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+    .meta-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+    .meta-item { border:1px solid #f0ebe2; border-radius:10px; padding:12px; font-size:13px; }
+    .meta-item strong { display:block; font-size:12px; color:#8a8a8a; margin-bottom:6px; }
+    .output { min-height:140px; max-height:360px; overflow:auto; white-space:pre-wrap; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; background:#fafafa; border:1px solid #f0ebe2; border-radius:10px; padding:12px; }
+    @media (max-width: 900px) { .grid, .meta-grid { grid-template-columns:1fr; } .page-hd { flex-direction:column; } }
+  </style>
+</head>
+<body>
+<div id="admin-header" data-active="/admin/diagnostics"></div>
+<main class="admin-main">
+  <div class="page-hd">
+    <div>
+      <div class="page-title">诊断</div>
+      <div class="page-sub">查看 Qwen probes、captures 和统一运行态诊断信息。</div>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn" id="btn-refresh">刷新</button>
+      <button class="btn" id="btn-clear-captures">清空 Captures</button>
+    </div>
+  </div>
+
+  <div class="grid">
+    <section class="card">
+      <div class="page-title" style="font-size:16px;margin-bottom:14px;">Qwen Probes</div>
+      <div class="meta-grid">
+        <div class="meta-item"><strong>healthz</strong><span id="probe-health">-</span></div>
+        <div class="meta-item"><strong>readyz</strong><span id="probe-ready">-</span></div>
+        <div class="meta-item"><strong>Engine Mode</strong><span id="probe-engine">-</span></div>
+        <div class="meta-item"><strong>Browser Pool</strong><span id="probe-browser">-</span></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="page-title" style="font-size:16px;margin-bottom:14px;">Any2API 运行态</div>
+      <div class="meta-grid">
+        <div class="meta-item"><strong>Directory Status</strong><span id="runtime-status">-</span></div>
+        <div class="meta-item"><strong>Revision</strong><span id="runtime-revision">-</span></div>
+        <div class="meta-item"><strong>Qwen Enabled</strong><span id="runtime-qwen">-</span></div>
+        <div class="meta-item"><strong>Qwen Accounts</strong><span id="runtime-accounts">-</span></div>
+      </div>
+    </section>
+  </div>
+
+  <section class="card">
+    <div class="page-title" style="font-size:16px;margin-bottom:14px;">Qwen Captures</div>
+    <div class="output" id="captures-output">加载中...</div>
+  </section>
+</main>
+<script src="/static/js/i18n.js?v={{APP_VERSION}}"></script>
+<script src="/static/js/auth.js?v={{APP_VERSION}}"></script>
+<script src="/static/js/admin-header.js?v={{APP_VERSION}}"></script>
+<script src="/static/js/toast.js?v={{APP_VERSION}}"></script>
+<script src="/static/js/footer.js?v={{APP_VERSION}}"></script>
+<script>
+async function api(method, path) {
+  const key = await adminKey.get();
+  const res = await fetch(ADMIN_API + path, { method, headers: { Authorization: `Bearer ${key}` } });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+async function loadDiagnostics() {
+  const [runtime, qwenStatus, health, ready, captures] = await Promise.all([
+    api('GET', '/status'),
+    api('GET', '/qwen/status').catch((e) => ({ error: String(e) })),
+    api('GET', '/qwen/healthz').catch((e) => ({ error: String(e) })),
+    api('GET', '/qwen/readyz').catch((e) => ({ error: String(e) })),
+    api('GET', '/qwen/captures').catch((e) => ({ captures: [{ error: String(e) }] })),
+  ]);
+  document.getElementById('probe-health').textContent = health.status || health.detail || health.error || '-';
+  document.getElementById('probe-ready').textContent = ready.status || ready.detail || ready.error || '-';
+  document.getElementById('probe-engine').textContent = qwenStatus.engine_mode || '-';
+  document.getElementById('probe-browser').textContent = qwenStatus.browser_engine?.started ? `started · pool=${qwenStatus.browser_engine.pool_size}` : 'stopped';
+  document.getElementById('runtime-status').textContent = runtime.status || '-';
+  document.getElementById('runtime-revision').textContent = String(runtime.revision || 0);
+  document.getElementById('runtime-qwen').textContent = qwenStatus.error ? 'error' : 'enabled';
+  document.getElementById('runtime-accounts').textContent = String(qwenStatus.accounts?.total || 0);
+  document.getElementById('captures-output').textContent = JSON.stringify(captures.captures || captures, null, 2);
+}
+(async () => {
+  await renderAdminHeader?.();
+  await renderSiteFooter?.();
+  const key = await adminKey.get();
+  if (!key || !await verifyKey(ADMIN_API + '/verify', key).catch(() => false)) return location.href = '/admin/login';
+  document.getElementById('btn-refresh').onclick = () => loadDiagnostics().catch((e) => showToast(`刷新失败: ${e.message}`, 'error'));
+  document.getElementById('btn-clear-captures').onclick = async () => {
+    try { await api('DELETE', '/qwen/captures'); showToast('Qwen captures 已清空', 'success'); await loadDiagnostics(); }
+    catch (e) { showToast(`清空失败: ${e.message}`, 'error'); }
+  };
+  await loadDiagnostics().catch((e) => showToast(`加载失败: ${e.message}`, 'error'));
+})();
+</script>
+</body>
+</html>
