@@ -1,3 +1,5 @@
+# any2api
+
 <img width="9936" height="2538" alt="图片20260409204656" src="https://github.com/user-attachments/assets/794a713b-eb78-4f09-9ec1-ac122d6ca2f9" />
 
 [![Python](https://img.shields.io/badge/python-3.13%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
@@ -9,11 +11,20 @@
 
 
 > [!NOTE]
-> 本项目仅供学习与研究交流。请务必遵循 Grok 的使用条款及当地法律法规，不得用于非法用途！二开与 PR 请保留原作者与前端标识。
+> 本项目仅供学习与研究交流。请务必遵循 Grok / Qwen 的使用条款及当地法律法规，不得用于非法用途！二开与 PR 请保留原作者与前端标识。
 
 <br>
 
-Grok2API 是一个基于 **FastAPI** 构建的 Grok 网关，支持将 Grok Web 能力以 OpenAI 兼容 API 的方式转换。核心特性：
+`any2api` 是一个基于 **FastAPI** 构建的统一上游网关。当前这套仓库把 `grok2api` 和内嵌 `qwen2API` 整合到同一个服务中，对外提供统一的 OpenAI 兼容入口，供 `every2api` 或其他客户端接入。
+
+推荐链路：
+
+- `every2api` 负责用户系统、API Key、计费、分组和对外模型暴露
+- `any2api` 负责统一承接 `grok` / `qwen` 请求
+- `grok2api` 负责 Grok 上游适配
+- `qwen2API` 负责 Qwen 上游适配
+
+当前核心特性：
 - OpenAI 兼容接口：`/v1/models`、`/v1/chat/completions`、`/v1/responses`、`/v1/images/generations`、`/v1/images/edits`、`/v1/videos`、`/v1/videos/{video_id}`、`/v1/videos/{video_id}/content`
 - Anthropic 兼容接口：`/v1/messages`
 - 支持流式与非流式对话、显式思考输出、函数工具结构透传，以及统一的 token / usage 统计
@@ -21,6 +32,7 @@ Grok2API 是一个基于 **FastAPI** 构建的 Grok 网关，支持将 Grok Web 
 - 支持本地缓存图片、视频与本地代理链接返回
 - 支持文生图、图像编辑、文生视频、图生视频
 - 内置 Admin 后台管理、Web Chat、Masonry 生图、ChatKit 语音页面
+- 支持嵌入式 `qwen2API backend`，已覆盖 Qwen 聊天、文件上传/删除、图片生成，以及 `qwen3.6-plus:auto/fast/thinking`
 
 <br>
 
@@ -93,8 +105,8 @@ flowchart LR
 ### 本地部署
 
 ```bash
-git clone https://github.com/chenyme/grok2api
-cd grok2api
+git clone https://github.com/yunfanxing6/any2api
+cd any2api
 cp .env.example .env
 uv sync
 uv run granian --interface asgi --host 0.0.0.0 --port 8000 --workers 1 app.main:app
@@ -103,19 +115,19 @@ uv run granian --interface asgi --host 0.0.0.0 --port 8000 --workers 1 app.main:
 ### Docker Compose
 
 ```bash
-git clone https://github.com/chenyme/grok2api
-cd grok2api
+git clone https://github.com/yunfanxing6/any2api
+cd any2api
 cp .env.example .env
 docker compose up -d
 ```
 
 ### Vercel
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/chenyme/grok2api&env=LOG_LEVEL,LOG_FILE_ENABLED,DATA_DIR,LOG_DIR,ACCOUNT_STORAGE,ACCOUNT_REDIS_URL,ACCOUNT_MYSQL_URL,ACCOUNT_POSTGRESQL_URL)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/yunfanxing6/any2api&env=LOG_LEVEL,LOG_FILE_ENABLED,DATA_DIR,LOG_DIR,ACCOUNT_STORAGE,ACCOUNT_REDIS_URL,ACCOUNT_MYSQL_URL,ACCOUNT_POSTGRESQL_URL)
 
 ### Render
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/chenyme/grok2api)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/yunfanxing6/any2api)
 
 ### 首次启动
 
