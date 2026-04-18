@@ -175,7 +175,7 @@ async def chat_completions(request: Request):
                             assistant_message=assistant_message,
                         )
                         final_finish_reason = "tool_calls" if directive.stop_reason == "tool_use" else execution.state.finish_reason
-                        for chunk in translator.finalize(final_finish_reason):
+                        for chunk in translator.finalize(final_finish_reason, usage=result.usage):
                             yield chunk
                         return
                     except HTTPException as he:

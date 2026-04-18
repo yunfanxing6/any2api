@@ -77,6 +77,23 @@ def _feedback_kind(exc: BaseException) -> "FeedbackKind":
     return feedback_kind_for_error(exc)
 
 
+def _build_stream_usage(
+    message: str,
+    *,
+    answer_text: str = "",
+    thinking_text: str = "",
+    tool_calls: list | None = None,
+) -> dict:
+    """Build the final OpenAI usage payload for streaming chat responses."""
+    pt = estimate_prompt_tokens(message)
+    rt = estimate_tokens(thinking_text) if thinking_text else 0
+    if tool_calls is not None:
+        ct = estimate_tool_call_tokens(tool_calls)
+    else:
+        ct = estimate_tokens(answer_text)
+    return build_usage(pt, ct + rt, reasoning_tokens=rt)
+
+
 async def _download_image_bytes(token: str, url: str) -> tuple[bytes, str]:
     """Download image bytes via the shared asset transport used by /v1/images."""
     from app.dataplane.reverse.protocol.xai_assets import infer_content_type
@@ -382,6 +399,7 @@ async def completions(
                                             chunk = make_stream_chunk(response_id, model, safe_text)
                                             yield f"data: {orjson.dumps(chunk).decode()}\n\n"
                                         if parsed_calls is not None:
+                                            thinking_text = "".join(adapter.thinking_buf) if emit_think else ""
                                             for i, tc in enumerate(parsed_calls):
                                                 chunk = make_tool_call_chunk(
                                                     response_id, model, i,
@@ -389,7 +407,11 @@ async def completions(
                                                     is_first=True,
                                                 )
                                                 yield f"data: {orjson.dumps(chunk).decode()}\n\n"
-                                            done_chunk = make_tool_call_done_chunk(response_id, model)
+                                            done_chunk = make_tool_call_done_chunk(
+                                                response_id,
+                                                model,
+                                                usage=_build_stream_usage(message, thinking_text=thinking_text, tool_calls=parsed_calls),
+                                            )
                                             yield f"data: {orjson.dumps(done_chunk).decode()}\n\n"
                                             yield "data: [DONE]\n\n"
                                             tool_calls_emitted = True
@@ -414,6 +436,7 @@ async def completions(
                             # Stream ended — flush sieve for any buffered XML
                             flushed_calls = sieve.flush()
                             if flushed_calls:
+                                thinking_text = "".join(adapter.thinking_buf) if emit_think else ""
                                 for i, tc in enumerate(flushed_calls):
                                     chunk = make_tool_call_chunk(
                                         response_id, model, i,
@@ -421,7 +444,11 @@ async def completions(
                                         is_first=True,
                                     )
                                     yield f"data: {orjson.dumps(chunk).decode()}\n\n"
-                                done_chunk = make_tool_call_done_chunk(response_id, model)
+                                done_chunk = make_tool_call_done_chunk(
+                                    response_id,
+                                    model,
+                                    usage=_build_stream_usage(message, thinking_text=thinking_text, tool_calls=flushed_calls),
+                                )
                                 yield f"data: {orjson.dumps(done_chunk).decode()}\n\n"
                                 yield "data: [DONE]\n\n"
                                 tool_calls_emitted = True
@@ -430,17 +457,27 @@ async def completions(
                                             model, len(flushed_calls))
 
                         if not tool_calls_emitted:
+                            full_text = "".join(adapter.text_buf)
                             for url, img_id in adapter.image_urls:
                                 img_text = await _resolve_image(token, url, img_id)
+                                full_text += img_text + "\n"
                                 chunk = make_stream_chunk(response_id, model, img_text + "\n")
                                 yield f"data: {orjson.dumps(chunk).decode()}\n\n"
 
                             references = adapter.references_suffix()
                             if references:
+                                full_text += references
                                 chunk = make_stream_chunk(response_id, model, references)
                                 yield f"data: {orjson.dumps(chunk).decode()}\n\n"
 
-                            final = make_stream_chunk(response_id, model, "", is_final=True)
+                            thinking_text = "".join(adapter.thinking_buf) if emit_think else ""
+                            final = make_stream_chunk(
+                                response_id,
+                                model,
+                                "",
+                                is_final=True,
+                                usage=_build_stream_usage(message, answer_text=full_text, thinking_text=thinking_text),
+                            )
                             yield f"data: {orjson.dumps(final).decode()}\n\n"
                             yield "data: [DONE]\n\n"
                             success = True
@@ -564,12 +601,11 @@ async def completions(
         if parse_result.calls:
             logger.info("chat request tool_calls: attempt={}/{} model={} call_count={}",
                         attempt + 1, max_retries + 1, model, len(parse_result.calls))
-            pt = estimate_prompt_tokens(message)
             return make_tool_call_response(
                 model, parse_result.calls,
                 prompt_content = message,
                 response_id = response_id,
-                usage       = build_usage(pt, estimate_tool_call_tokens(parse_result.calls)),
+                usage       = _build_stream_usage(message, thinking_text=thinking_text or "", tool_calls=parse_result.calls),
             )
 
     logger.info("chat request completed: attempt={}/{} model={} text_len={} reasoning_len={} image_count={}",

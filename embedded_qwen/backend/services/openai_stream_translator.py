@@ -132,7 +132,7 @@ class OpenAIStreamTranslator:
         if tool_calls:
             self.tool_calls_emitted = True
 
-    def finalize(self, finish_reason: str) -> list[str]:
+    def finalize(self, finish_reason: str, usage: dict[str, Any] | None = None) -> list[str]:
         final_finish_reason = finish_reason
         buffered_text = "".join(self.buffered_toolish_fragments)
         if self.build_final_directive is not None and not self.tool_calls_emitted:
@@ -157,8 +157,15 @@ class OpenAIStreamTranslator:
             self._emit_content_chunk(buffered_text)
 
         chunks = list(self.pending_chunks)
-        chunks.append(
-            f"data: {json.dumps({'id': self.completion_id, 'object': 'chat.completion.chunk', 'created': self.created, 'model': self.model_name, 'choices': [{'index': 0, 'delta': {}, 'finish_reason': final_finish_reason}]}, ensure_ascii=False)}\n\n"
-        )
+        final_payload: dict[str, Any] = {
+            'id': self.completion_id,
+            'object': 'chat.completion.chunk',
+            'created': self.created,
+            'model': self.model_name,
+            'choices': [{'index': 0, 'delta': {}, 'finish_reason': final_finish_reason}],
+        }
+        if usage is not None:
+            final_payload['usage'] = usage
+        chunks.append(f"data: {json.dumps(final_payload, ensure_ascii=False)}\n\n")
         chunks.append("data: [DONE]\n\n")
         return chunks
