@@ -218,11 +218,69 @@ async def verify_account(email: str, request: Request):
 
     return {"email": acc.email, "valid": is_valid}
 
+
+@router.post("/accounts-verify-by-token", dependencies=[Depends(verify_admin)])
+async def verify_account_by_token(request: Request):
+    """邮箱缺失时按 token 验证账号。"""
+    from backend.services.qwen_client import QwenClient
+    from backend.core.account_pool import AccountPool
+    import logging
+
+    log = logging.getLogger("qwen2api.admin")
+    pool: AccountPool = request.app.state.account_pool
+    client: QwenClient = request.app.state.qwen_client
+
+    try:
+        data = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    token = str((data or {}).get("token") or "").strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="token is required")
+
+    acc = next((a for a in pool.accounts if a.token == token), None)
+    if not acc:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    is_valid = await client.verify_token(acc.token)
+    if not is_valid and acc.password:
+        log.info(f"[校验] {acc.email or '[token-only]'} token失效，尝试自动刷新...")
+        is_valid = await client.auth_resolver.refresh_token(acc)
+
+    acc.valid = is_valid
+    await pool.save()
+
+    return {"email": acc.email, "token": acc.token, "valid": is_valid}
+
 @router.delete("/accounts/{email}", dependencies=[Depends(verify_admin)])
 async def delete_account(email: str, request: Request):
     from backend.core.account_pool import AccountPool
     pool: AccountPool = request.app.state.account_pool
     await pool.remove(email)
+    return {"ok": True}
+
+
+@router.delete("/accounts-delete-by-token", dependencies=[Depends(verify_admin)])
+async def delete_account_by_token(request: Request):
+    """邮箱缺失时按 token 删除账号。"""
+    from backend.core.account_pool import AccountPool
+
+    try:
+        data = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    token = str((data or {}).get("token") or "").strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="token is required")
+
+    pool: AccountPool = request.app.state.account_pool
+    before = len(pool.accounts)
+    pool.accounts = [a for a in pool.accounts if a.token != token]
+    if len(pool.accounts) == before:
+        raise HTTPException(status_code=404, detail="Account not found")
+    await pool.save()
     return {"ok": True}
 
 @router.get("/settings", dependencies=[Depends(verify_admin)])

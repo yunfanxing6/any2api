@@ -255,6 +255,7 @@ function renderAccounts() {
     const inflight = Number(item.inflight || 0);
     const lastError = escapeHtml(item.last_error || '-');
     const encodedEmail = encodeURIComponent(item.email || '');
+    const encodedToken = encodeURIComponent(item.token || '');
     const canActivate = item.status_code === 'pending_activation' || item.activation_pending;
     return `
       <tr>
@@ -266,9 +267,9 @@ function renderAccounts() {
         <td class="muted">${lastError}</td>
         <td>
           <div class="action-row">
-            <button class="btn-xs" onclick="verifyAccount('${encodedEmail}')">验证</button>
+            <button class="btn-xs" onclick="verifyAccount('${encodedEmail}', '${encodedToken}')">验证</button>
             ${canActivate ? `<button class="btn-xs" onclick="activateAccount('${encodedEmail}')">激活</button>` : ''}
-            <button class="btn-xs btn-xs-danger" onclick="deleteAccount('${encodedEmail}')">删除</button>
+            <button class="btn-xs btn-xs-danger" onclick="deleteAccount('${encodedEmail}', '${encodedToken}')">删除</button>
           </div>
         </td>
       </tr>`;
@@ -402,9 +403,13 @@ async function verifyAll() {
   }
 }
 
-async function verifyAccount(encodedEmail) {
+async function verifyAccount(encodedEmail, encodedToken) {
   try {
-    await api('POST', `/accounts/${encodedEmail}/verify`, {});
+    if (encodedEmail) {
+      await api('POST', `/accounts/${encodedEmail}/verify`, {});
+    } else {
+      await api('POST', '/accounts-verify-by-token', { token: decodeURIComponent(encodedToken || '') });
+    }
     showToast('账号验证完成', 'success');
     await load();
   } catch (error) {
@@ -422,10 +427,14 @@ async function activateAccount(encodedEmail) {
   }
 }
 
-async function deleteAccount(encodedEmail) {
+async function deleteAccount(encodedEmail, encodedToken) {
   if (!confirm('确认删除这个 Qwen 账号？')) return;
   try {
-    await api('DELETE', `/accounts/${encodedEmail}`);
+    if (encodedEmail) {
+      await api('DELETE', `/accounts/${encodedEmail}`);
+    } else {
+      await api('DELETE', '/accounts-delete-by-token', { token: decodeURIComponent(encodedToken || '') });
+    }
     showToast('账号已删除', 'success');
     await load();
   } catch (error) {

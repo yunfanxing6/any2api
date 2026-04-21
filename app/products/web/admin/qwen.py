@@ -187,9 +187,23 @@ async def qwen_verify_account(email: str, request: Request):
     return _to_response(resp)
 
 
+@router.post("/accounts-verify-by-token")
+async def qwen_verify_account_by_token(request: Request):
+    body = await request.json()
+    resp = await _require_provider(request).request("POST", "/api/admin/accounts-verify-by-token", json_body=body)
+    return _to_response(resp)
+
+
 @router.delete("/accounts/{email}")
 async def qwen_delete_account(email: str, request: Request):
     resp = await _require_provider(request).request("DELETE", f"/api/admin/accounts/{quote(email, safe='')}")
+    return _to_response(resp)
+
+
+@router.delete("/accounts-delete-by-token")
+async def qwen_delete_account_by_token(request: Request):
+    body = await request.json()
+    resp = await _require_provider(request).request("DELETE", "/api/admin/accounts-delete-by-token", json_body=body)
     return _to_response(resp)
 
 
