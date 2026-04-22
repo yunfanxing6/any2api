@@ -104,6 +104,9 @@ class ChatGPT2APIProvider:
             timeout=httpx.Timeout(float(settings["timeout_sec"])),
         )
 
+    async def request(self, method: str, path: str, *, json_body: dict[str, Any] | None = None) -> httpx.Response:
+        return await self._request(method, path, json_body=json_body)
+
     def _error_response(self, message: str, *, status_code: int = 503) -> Response:
         return Response(
             content=orjson.dumps({"error": {"message": message, "type": "server_error"}}),

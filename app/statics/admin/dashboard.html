@@ -42,16 +42,18 @@
   <div class="page-hd">
     <div>
       <div class="page-title">运行总览</div>
-      <div class="page-sub">统一查看 Any2API 的 Grok / Qwen provider 状态、账号池健康和可用接口。</div>
+      <div class="page-sub">统一查看 Any2API 的 Grok / Qwen / ChatGPT2API provider 状态、账号池健康和可用接口。</div>
     </div>
     <button type="button" class="page-action-btn" id="btn-refresh">刷新</button>
   </div>
 
-  <div class="stat-grid">
+  <div class="stat-grid" style="grid-template-columns:repeat(6,minmax(0,1fr));">
     <div class="stat-cell"><div class="stat-label">Grok Tokens</div><div class="stat-num" id="grok-total">0</div></div>
     <div class="stat-cell"><div class="stat-label">Grok Active</div><div class="stat-num" id="grok-active" style="color:#1f8f4a">0</div></div>
     <div class="stat-cell"><div class="stat-label">Qwen Accounts</div><div class="stat-num" id="qwen-total">0</div></div>
     <div class="stat-cell"><div class="stat-label">Qwen Ready</div><div class="stat-num" id="qwen-ready" style="color:#2563eb">0</div></div>
+    <div class="stat-cell"><div class="stat-label">ChatGPT Accounts</div><div class="stat-num" id="chatgpt-total">0</div></div>
+    <div class="stat-cell"><div class="stat-label">ChatGPT Ready</div><div class="stat-num" id="chatgpt-ready" style="color:#7c3aed">0</div></div>
   </div>
 
   <div class="panel-grid">
@@ -78,15 +80,28 @@
         <div class="meta-item"><strong>限流/失效</strong><span id="qwen-invalid">0</span></div>
       </div>
     </section>
+
+    <section class="card">
+      <div class="page-title" style="font-size:16px;margin-bottom:14px;">ChatGPT2API 运行态</div>
+      <div class="meta-grid">
+        <div class="meta-item"><strong>Connected</strong><span id="chatgpt-connected">-</span></div>
+        <div class="meta-item"><strong>Version</strong><span id="chatgpt-version">-</span></div>
+        <div class="meta-item"><strong>Base URL</strong><span id="chatgpt-base-url">-</span></div>
+        <div class="meta-item"><strong>Enabled</strong><span id="chatgpt-enabled">-</span></div>
+        <div class="meta-item"><strong>Configured</strong><span id="chatgpt-configured">-</span></div>
+        <div class="meta-item"><strong>Models</strong><span id="chatgpt-models">-</span></div>
+      </div>
+    </section>
   </div>
 
   <section class="card">
     <div class="page-title" style="font-size:16px;margin-bottom:14px;">统一接口</div>
     <div class="endpoint-list">
-      <div class="endpoint-item"><span><code>POST /v1/chat/completions</code></span><span class="muted">Grok / Qwen 文本与多模态入口</span></div>
-      <div class="endpoint-item"><span><code>POST /v1/images/generations</code></span><span class="muted">Grok / Qwen 图片生成入口</span></div>
-      <div class="endpoint-item"><span><code>GET /v1/models</code></span><span class="muted">统一模型目录，包含 Grok 和 Qwen</span></div>
+      <div class="endpoint-item"><span><code>POST /v1/chat/completions</code></span><span class="muted">Grok / Qwen 文本与多模态入口，`gpt-image-*` 走 ChatGPT2API 图片场景聊天兼容层</span></div>
+      <div class="endpoint-item"><span><code>POST /v1/images/generations</code></span><span class="muted">Grok / Qwen / ChatGPT2API 图片生成入口</span></div>
+      <div class="endpoint-item"><span><code>GET /v1/models</code></span><span class="muted">统一模型目录，包含 Grok、Qwen 和 `gpt-image-*`</span></div>
       <div class="endpoint-item"><span><code>GET /admin/api/qwen/status</code></span><span class="muted">Qwen provider 运行状态</span></div>
+      <div class="endpoint-item"><span><code>GET /admin/api/chatgpt2api/status</code></span><span class="muted">ChatGPT2API provider 运行状态</span></div>
     </div>
   </section>
 </main>
@@ -108,10 +123,11 @@ function sumQuota(items, mode) {
 }
 
 async function loadDashboard() {
-  const [runtime, tokensData, qwenStatus] = await Promise.all([
+  const [runtime, tokensData, qwenStatus, chatgptStatus] = await Promise.all([
     api('/status'),
     api('/tokens'),
     api('/qwen/status').catch(() => ({ accounts: {}, engine_mode: '-', browser_engine: null, httpx_engine: null })),
+    api('/chatgpt2api/status').catch(() => ({ accounts: {}, models: [], connected: false, version: '-', base_url: '-', enabled: false, configured: false })),
   ]);
 
   const tokens = tokensData.tokens || [];
@@ -134,6 +150,16 @@ async function loadDashboard() {
   document.getElementById('qwen-waiting').textContent = String(accounts.waiting || 0);
   document.getElementById('qwen-pending').textContent = String(accounts.activation_pending || 0);
   document.getElementById('qwen-invalid').textContent = `${accounts.rate_limited || 0} / ${accounts.invalid || 0}`;
+
+  const chatgptAccounts = chatgptStatus.accounts || {};
+  document.getElementById('chatgpt-total').textContent = String(chatgptAccounts.total || 0);
+  document.getElementById('chatgpt-ready').textContent = String(chatgptAccounts.normal || 0);
+  document.getElementById('chatgpt-connected').textContent = chatgptStatus.connected ? 'yes' : 'no';
+  document.getElementById('chatgpt-version').textContent = chatgptStatus.version || '-';
+  document.getElementById('chatgpt-base-url').textContent = chatgptStatus.base_url || '-';
+  document.getElementById('chatgpt-enabled').textContent = chatgptStatus.enabled ? 'yes' : 'no';
+  document.getElementById('chatgpt-configured').textContent = chatgptStatus.configured ? 'yes' : 'no';
+  document.getElementById('chatgpt-models').textContent = Array.isArray(chatgptStatus.models) && chatgptStatus.models.length ? chatgptStatus.models.join(', ') : '-';
 }
 
 (async () => {

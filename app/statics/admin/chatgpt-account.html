@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Any2API - ChatGPT2API 管理</title>
+  <link rel="icon" href="/favicon.ico?v={{APP_VERSION}}">
+  <link href="https://cdn.jsdelivr.net/npm/geist@1.0.0/dist/fonts/geist-sans/style.css" rel="stylesheet">
+  <link href="/static/css/app.css?v={{APP_VERSION}}" rel="stylesheet">
+  <style>
+    body { background:#faf9f5; }
+    .page-hd { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:20px; }
+    .page-title { font-size:22px; font-weight:700; line-height:1.2; }
+    .page-sub { font-size:13px; color:var(--fg-muted); margin-top:5px; }
+    .page-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .btn { height:32px; padding:0 14px; border-radius:999px; display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; border:1px solid #e6e6e6; background:#fafafa; color:#444; }
+    .btn:hover { background:#f3f3f3; border-color:#dcdcdc; }
+    .btn-primary { background:#111; border-color:#111; color:#fff; }
+    .btn-primary:hover { background:#222; border-color:#222; }
+    .stat-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:12px; margin-bottom:18px; }
+    .stat-cell { background:#fff; border-radius:12px; padding:14px 16px; min-height:86px; }
+    .stat-label { font-size:11px; color:#8a8a8a; }
+    .stat-num { font-size:22px; font-weight:700; margin-top:16px; }
+    .card { background:#fff; border-radius:12px; padding:18px; margin-bottom:16px; }
+    .card-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
+    .card-title { font-size:14px; font-weight:700; }
+    .meta-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+    .meta-item { border:1px solid #f0ebe2; border-radius:10px; padding:12px; font-size:13px; }
+    .meta-item strong { display:block; font-size:12px; color:#8a8a8a; margin-bottom:6px; font-weight:600; }
+    .field { display:flex; flex-direction:column; gap:6px; }
+    .field label { font-size:12px; color:#666; font-weight:600; }
+    .input, textarea { width:100%; border:1px solid #ececec; border-radius:10px; background:#fbfbfb; padding:10px 12px; font-family:inherit; }
+    textarea { min-height:88px; resize:vertical; }
+    .table-wrap { overflow:auto; }
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    th, td { padding:12px 10px; text-align:left; border-bottom:1px solid #f0ebe2; vertical-align:top; }
+    th { font-size:12px; color:#8a8a8a; font-weight:600; white-space:nowrap; }
+    .status-pill { display:inline-flex; align-items:center; justify-content:center; min-width:64px; height:24px; padding:0 10px; border-radius:999px; font-size:12px; font-weight:600; }
+    .status-normal { background:#e7f7ec; color:#1f8f4a; }
+    .status-limited { background:#fff3ec; color:#dd6b20; }
+    .status-disabled { background:#f5f5f5; color:#555; }
+    .status-invalid { background:#fdecec; color:#c53030; }
+    .action-row { display:flex; gap:8px; flex-wrap:wrap; }
+    .btn-xs { height:28px; padding:0 10px; border-radius:999px; border:1px solid #e6e6e6; background:#fafafa; font-size:12px; font-weight:600; }
+    .btn-xs:hover { background:#f3f3f3; }
+    .btn-xs-danger { color:#b42318; }
+    .muted { color:#8a8a8a; font-size:12px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background:#f5f5f5; padding:2px 6px; border-radius:999px; }
+    @media (max-width: 1100px) { .stat-grid, .meta-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+    @media (max-width: 720px) { .page-hd { flex-direction:column; } .stat-grid, .meta-grid { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+<div id="admin-header" data-active="/admin/chatgpt-account"></div>
+<main class="admin-main">
+  <div class="page-hd">
+    <div>
+      <div class="page-title">ChatGPT2API 管理</div>
+      <div class="page-sub">管理 `chatgpt2api` sidecar 的 access token 号池，并查看 `gpt-image-*` 模型是否已联通。</div>
+    </div>
+    <div class="page-actions">
+      <button type="button" class="btn" id="btn-refresh">刷新</button>
+      <button type="button" class="btn" id="btn-refresh-all">刷新全部额度</button>
+    </div>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat-cell"><div class="stat-label">账号总数</div><div class="stat-num" id="s-total">0</div></div>
+    <div class="stat-cell"><div class="stat-label">正常</div><div class="stat-num" id="s-normal" style="color:#1f8f4a">0</div></div>
+    <div class="stat-cell"><div class="stat-label">限流</div><div class="stat-num" id="s-limited" style="color:#dd6b20">0</div></div>
+    <div class="stat-cell"><div class="stat-label">禁用</div><div class="stat-num" id="s-disabled">0</div></div>
+    <div class="stat-cell"><div class="stat-label">异常</div><div class="stat-num" id="s-invalid" style="color:#c53030">0</div></div>
+  </div>
+
+  <section class="card">
+    <div class="card-head">
+      <div class="card-title">运行状态</div>
+      <div class="muted" id="status-summary">加载中...</div>
+    </div>
+    <div class="meta-grid">
+      <div class="meta-item"><strong>Enabled</strong><span id="meta-enabled">-</span></div>
+      <div class="meta-item"><strong>Configured</strong><span id="meta-configured">-</span></div>
+      <div class="meta-item"><strong>Connected</strong><span id="meta-connected">-</span></div>
+      <div class="meta-item"><strong>Version</strong><span id="meta-version">-</span></div>
+      <div class="meta-item"><strong>Base URL</strong><span id="meta-base-url">-</span></div>
+      <div class="meta-item"><strong>Models</strong><span id="meta-models">-</span></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <div class="card-title">新增 Access Token</div>
+      <div class="muted">对应原项目的 token 导入入口。支持一行一个批量导入。</div>
+    </div>
+    <div class="field">
+      <label for="account-tokens">Access Tokens</label>
+      <textarea id="account-tokens" class="input mono" placeholder="请输入 ChatGPT access_token，支持一行一个批量导入"></textarea>
+    </div>
+    <div class="page-actions" style="margin-top:14px;">
+      <button type="button" class="btn btn-primary" id="btn-add-accounts">导入账号</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <div class="card-title">账号列表</div>
+      <div class="muted" id="account-count">0 条</div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>类型</th>
+            <th>状态</th>
+            <th>Quota</th>
+            <th>恢复时间</th>
+            <th>默认模型</th>
+            <th>Token</th>
+            <th>成功/失败</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="accounts-body"><tr><td colspan="9" class="muted">加载中...</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script src="/static/js/i18n.js?v={{APP_VERSION}}"></script>
+<script src="/static/js/auth.js?v={{APP_VERSION}}"></script>
+<script src="/static/js/admin-header.js?v={{APP_VERSION}}"></script>
+<script src="/static/js/toast.js?v={{APP_VERSION}}"></script>
+<script src="/static/js/footer.js?v={{APP_VERSION}}"></script>
+<script>
+const CHATGPT_API = '/admin/api/chatgpt2api';
+let chatgptAccounts = [];
+let chatgptStatus = {};
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function maskToken(token) {
+  const value = String(token || '');
+  if (value.length <= 18) return value;
+  return `${value.slice(0, 10)}...${value.slice(-8)}`;
+}
+
+function statusMeta(status) {
+  const value = String(status || '').trim();
+  if (value === '正常') return { label: value, cls: 'status-normal' };
+  if (value === '限流') return { label: value, cls: 'status-limited' };
+  if (value === '禁用') return { label: value, cls: 'status-disabled' };
+  return { label: value || '异常', cls: 'status-invalid' };
+}
+
+function errorMessageFromPayload(payload, fallback) {
+  const value = payload?.detail ?? payload?.error ?? fallback;
+  if (typeof value === 'string') return value;
+  if (value && typeof value === 'object') {
+    if (typeof value.message === 'string') return value.message;
+    try { return JSON.stringify(value); } catch (_) {}
+  }
+  return String(value || 'request failed');
+}
+
+async function api(method, path, body) {
+  const key = await adminKey.get();
+  const response = await fetch(CHATGPT_API + path, {
+    method,
+    headers: {
+      ...(body != null ? { 'Content-Type': 'application/json' } : {}),
+      Authorization: `Bearer ${key}`,
+    },
+    ...(body != null ? { body: JSON.stringify(body) } : {}),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(errorMessageFromPayload(payload, response.statusText || String(response.status)));
+  return payload;
+}
+
+function setStats(status) {
+  const accounts = status.accounts || {};
+  document.getElementById('s-total').textContent = String(accounts.total || 0);
+  document.getElementById('s-normal').textContent = String(accounts.normal || 0);
+  document.getElementById('s-limited').textContent = String(accounts.limited || 0);
+  document.getElementById('s-disabled').textContent = String(accounts.disabled || 0);
+  document.getElementById('s-invalid').textContent = String(accounts.invalid || 0);
+  document.getElementById('status-summary').textContent = status.connected
+    ? `connected · models=${(status.models || []).length}`
+    : (status.error || 'not connected');
+  document.getElementById('meta-enabled').textContent = status.enabled ? 'yes' : 'no';
+  document.getElementById('meta-configured').textContent = status.configured ? 'yes' : 'no';
+  document.getElementById('meta-connected').textContent = status.connected ? 'yes' : 'no';
+  document.getElementById('meta-version').textContent = status.version || '-';
+  document.getElementById('meta-base-url').textContent = status.base_url || '-';
+  document.getElementById('meta-models').textContent = Array.isArray(status.models) && status.models.length ? status.models.join(', ') : '-';
+}
+
+function renderAccounts() {
+  const body = document.getElementById('accounts-body');
+  document.getElementById('account-count').textContent = `${chatgptAccounts.length} 条`;
+  if (!chatgptAccounts.length) {
+    body.innerHTML = '<tr><td colspan="9" class="muted">暂无 ChatGPT2API 账号</td></tr>';
+    return;
+  }
+  body.innerHTML = chatgptAccounts.map((item) => {
+    const meta = statusMeta(item.status);
+    const tokenArg = encodeURIComponent(item.access_token || '');
+    const nextStatus = String(item.status || '').trim() === '禁用' ? '正常' : '禁用';
+    const toggleLabel = nextStatus === '禁用' ? '禁用' : '启用';
+    return `
+      <tr>
+        <td>${escapeHtml(item.email || '-')}</td>
+        <td>${escapeHtml(item.type || '-')}</td>
+        <td><span class="status-pill ${meta.cls}">${escapeHtml(meta.label)}</span></td>
+        <td>${escapeHtml(item.quota ?? 0)}</td>
+        <td>${escapeHtml(item.restoreAt || '-')}</td>
+        <td>${escapeHtml(item.default_model_slug || '-')}</td>
+        <td><code class="mono">${escapeHtml(maskToken(item.access_token))}</code></td>
+        <td>${escapeHtml(item.success || 0)} / ${escapeHtml(item.fail || 0)}</td>
+        <td>
+          <div class="action-row">
+            <button class="btn-xs" onclick="refreshOne('${tokenArg}')">刷新</button>
+            <button class="btn-xs" onclick="toggleStatus('${tokenArg}', '${encodeURIComponent(nextStatus)}')">${toggleLabel}</button>
+            <button class="btn-xs btn-xs-danger" onclick="deleteOne('${tokenArg}')">删除</button>
+          </div>
+        </td>
+      </tr>`;
+  }).join('');
+}
+
+async function load() {
+  try {
+    const [status, accounts] = await Promise.all([
+      api('GET', '/status'),
+      api('GET', '/accounts'),
+    ]);
+    chatgptStatus = status || {};
+    chatgptAccounts = Array.isArray(accounts.items) ? accounts.items : [];
+    setStats(chatgptStatus);
+    renderAccounts();
+  } catch (error) {
+    showToast(`加载 ChatGPT2API 管理数据失败: ${error.message}`, 'error');
+    document.getElementById('accounts-body').innerHTML = `<tr><td colspan="9" class="muted">${escapeHtml(error.message)}</td></tr>`;
+  }
+}
+
+async function addAccounts() {
+  const tokens = document.getElementById('account-tokens').value
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (!tokens.length) {
+    showToast('请输入至少一个 access_token', 'error');
+    return;
+  }
+  try {
+    showToast(`正在导入 ${tokens.length} 个 access_token...`, 'info');
+    await api('POST', '/accounts', { tokens });
+    document.getElementById('account-tokens').value = '';
+    showToast('ChatGPT2API 账号已导入', 'success');
+    await load();
+  } catch (error) {
+    showToast(`导入失败: ${error.message}`, 'error');
+  }
+}
+
+async function refreshAll() {
+  try {
+    showToast('正在刷新全部 ChatGPT2API 账号额度...', 'info');
+    await api('POST', '/accounts/refresh', { access_tokens: [] });
+    showToast('刷新完成', 'success');
+    await load();
+  } catch (error) {
+    showToast(`刷新失败: ${error.message}`, 'error');
+  }
+}
+
+async function refreshOne(tokenArg) {
+  try {
+    const accessToken = decodeURIComponent(tokenArg);
+    await api('POST', '/accounts/refresh', { access_tokens: [accessToken] });
+    showToast('账号已刷新', 'success');
+    await load();
+  } catch (error) {
+    showToast(`刷新失败: ${error.message}`, 'error');
+  }
+}
+
+async function toggleStatus(tokenArg, nextStatusArg) {
+  try {
+    const accessToken = decodeURIComponent(tokenArg);
+    const status = decodeURIComponent(nextStatusArg);
+    await api('POST', '/accounts/update', { access_token: accessToken, status });
+    showToast(`账号已${status === '禁用' ? '禁用' : '启用'}`, 'success');
+    await load();
+  } catch (error) {
+    showToast(`更新失败: ${error.message}`, 'error');
+  }
+}
+
+async function deleteOne(tokenArg) {
+  try {
+    const accessToken = decodeURIComponent(tokenArg);
+    await api('DELETE', '/accounts', { tokens: [accessToken] });
+    showToast('账号已删除', 'success');
+    await load();
+  } catch (error) {
+    showToast(`删除失败: ${error.message}`, 'error');
+  }
+}
+
+(async () => {
+  await renderAdminHeader?.();
+  await renderSiteFooter?.();
+  const key = await adminKey.get();
+  if (!key || !await verifyKey(ADMIN_API + '/verify', key).catch(() => false)) return location.href = '/admin/login';
+  document.getElementById('btn-refresh').addEventListener('click', () => load().catch((e) => showToast(`刷新失败: ${e.message}`, 'error')));
+  document.getElementById('btn-refresh-all').addEventListener('click', refreshAll);
+  document.getElementById('btn-add-accounts').addEventListener('click', addAccounts);
+  await load();
+})();
+</script>
+</body>
+</html>

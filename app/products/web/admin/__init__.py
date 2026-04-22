@@ -126,6 +126,7 @@ from .batch import router as _batch_router                            # noqa: E4
 from .assets import router as _assets_router                          # noqa: E402
 from .cache import router as _cache_router                            # noqa: E402
 from .keys import router as _keys_router                              # noqa: E402
+from .chatgpt2api import router as _chatgpt2api_router                # noqa: E402
 from .qwen import router as _qwen_router                              # noqa: E402
 
 router.include_router(_tokens_router)
@@ -133,6 +134,7 @@ router.include_router(_batch_router)
 router.include_router(_assets_router)
 router.include_router(_cache_router)
 router.include_router(_keys_router)
+router.include_router(_chatgpt2api_router)
 router.include_router(_qwen_router)
 
 

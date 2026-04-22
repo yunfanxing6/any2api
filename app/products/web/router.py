@@ -58,6 +58,10 @@ async def admin_dashboard():
 async def admin_qwen_account():
     return _serve_html("admin/qwen-account.html")
 
+@router.get("/admin/chatgpt-account", include_in_schema=False)
+async def admin_chatgpt_account():
+    return _serve_html("admin/chatgpt-account.html")
+
 @router.get("/admin/config", include_in_schema=False)
 async def admin_config():
     return _serve_html("admin/config.html")
