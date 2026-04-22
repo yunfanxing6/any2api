@@ -211,6 +211,16 @@ function statusClass(code) {
   return `status-pill status-${code || 'invalid'}`;
 }
 
+function errorMessageFromPayload(payload, fallback) {
+  const value = payload?.detail ?? payload?.error ?? fallback;
+  if (typeof value === 'string') return value;
+  if (value && typeof value === 'object') {
+    if (typeof value.message === 'string') return value.message;
+    try { return JSON.stringify(value); } catch (_) {}
+  }
+  return String(value || 'request failed');
+}
+
 async function api(method, path, body) {
   const key = await adminKey.get();
   const response = await fetch(QWEN_API + path, {
@@ -222,7 +232,7 @@ async function api(method, path, body) {
     ...(body != null ? { body: JSON.stringify(body) } : {}),
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.detail || payload.error || response.statusText || String(response.status));
+  if (!response.ok) throw new Error(errorMessageFromPayload(payload, response.statusText || String(response.status)));
   return payload;
 }
 

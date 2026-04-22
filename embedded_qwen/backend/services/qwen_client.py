@@ -1,4 +1,5 @@
 import json
+import importlib.util
 import logging
 import time
 from typing import AsyncIterator
@@ -12,6 +13,10 @@ from backend.upstream.qwen_executor import QwenExecutor
 from backend.upstream.sse_consumer import parse_sse_chunk
 
 log = logging.getLogger("qwen2api.client")
+
+
+def _http2_available() -> bool:
+    return importlib.util.find_spec("h2") is not None
 
 
 class QwenClient:
@@ -30,10 +35,13 @@ class QwenClient:
             keepalive_expiry=30.0,
         )
         timeout = httpx.Timeout(connect=30.0, read=300.0, write=30.0, pool=30.0)
+        enable_http2 = _http2_available()
+        if not enable_http2:
+            log.warning("[QwenClient] h2 package missing, falling back to HTTP/1.1 transport")
         self._http_client = httpx.AsyncClient(
             limits=limits,
             timeout=timeout,
-            http2=True,
+            http2=enable_http2,
             follow_redirects=True,
         )
 
