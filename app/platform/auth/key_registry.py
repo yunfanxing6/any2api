@@ -69,6 +69,10 @@ def _normalize_multi(values: list[str] | tuple[str, ...] | None, allowed: tuple[
             return list(allowed)
         if item in allowed_set:
             seen.append(item)
+    # Backward compatibility: records saved before the provider list expands
+    # should keep behaving like full-access keys.
+    if allowed == ALL_PROVIDERS and set(seen) == (allowed_set - {"chatgpt2api"}):
+        return list(allowed)
     # Backward compatibility: records saved before the `files` scope existed
     # should keep behaving like full-access keys after the scope list expands.
     if "files" in allowed_set and set(seen) == (allowed_set - {"files"}):
