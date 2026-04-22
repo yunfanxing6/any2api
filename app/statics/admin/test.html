@@ -40,7 +40,7 @@
     <section class="card">
       <div class="page-title" style="font-size:16px;margin-bottom:14px;">聊天测试</div>
       <div class="field"><label>API Key</label><input id="chat-key" class="input" placeholder="默认自动填充第一个全局 key"></div>
-      <div class="field"><label>模型</label><select id="chat-model"><option>grok-4.20-0309</option><option>qwen3.6-plus:auto</option><option>qwen3.6-plus:fast</option><option>qwen3.6-plus:thinking</option><option>qwen3.5-plus:auto</option><option>qwen3.5-omni-plus</option></select></div>
+      <div class="field"><label>模型</label><select id="chat-model"><option>grok-4.20-0309-non-reasoning</option><option>grok-4.20-0309</option><option>grok-4.20-0309-reasoning</option><option>qwen3.6-plus:auto</option><option>qwen3.6-plus:fast</option><option>qwen3.6-plus:thinking</option><option>qwen3.5-plus:auto</option><option>qwen3.5-plus:fast</option><option>qwen3.5-plus:thinking</option><option>qwen3.5-omni-plus</option></select></div>
       <div class="field"><label>消息</label><textarea id="chat-message">Reply with exactly: ok</textarea></div>
       <button class="btn btn-primary" id="btn-chat">发送聊天请求</button>
       <div class="muted" style="margin-top:10px;">调用 <code>/v1/chat/completions</code></div>
@@ -50,7 +50,7 @@
     <section class="card">
       <div class="page-title" style="font-size:16px;margin-bottom:14px;">图片测试</div>
       <div class="field"><label>API Key</label><input id="image-key" class="input" placeholder="默认自动填充第一个全局 key"></div>
-      <div class="field"><label>模型</label><select id="image-model"><option>grok-2-image-1212</option><option>qwen3.6-plus</option><option>qwen3.5-plus</option><option>qwen3.5-omni-plus</option></select></div>
+      <div class="field"><label>模型</label><select id="image-model"><option>grok-imagine-image-lite</option><option>qwen3.6-plus</option><option>qwen-image</option><option>qwen-image-plus</option><option>qwen-image-turbo</option></select></div>
       <div class="field"><label>Prompt</label><textarea id="image-prompt">一只赛博朋克风格的猫，霓虹灯背景，超写实风格</textarea></div>
       <button class="btn btn-primary" id="btn-image">发送图片请求</button>
       <div class="muted" style="margin-top:10px;">调用 <code>/v1/images/generations</code></div>
@@ -76,6 +76,114 @@ async function fillDefaultKeys() {
   document.getElementById('chat-key').value = first;
   document.getElementById('image-key').value = first;
 }
+const CHAT_FALLBACK_MODELS = [
+  'grok-4.20-0309-non-reasoning',
+  'grok-4.20-0309',
+  'grok-4.20-0309-reasoning',
+  'qwen3.6-plus:auto',
+  'qwen3.6-plus:fast',
+  'qwen3.6-plus:thinking',
+  'qwen3.5-plus:auto',
+  'qwen3.5-plus:fast',
+  'qwen3.5-plus:thinking',
+  'qwen3.5-omni-plus',
+];
+const IMAGE_FALLBACK_MODELS = [
+  'grok-imagine-image-lite',
+  'qwen3.6-plus',
+  'qwen-image',
+  'qwen-image-plus',
+  'qwen-image-turbo',
+];
+const QWEN_IMAGE_MODELS = [
+  'qwen3.6-plus',
+  'qwen-image',
+  'qwen-image-plus',
+  'qwen-image-turbo',
+];
+function uniqueModels(models) {
+  const seen = new Set();
+  return (models || []).map((item) => String(item || '').trim()).filter((item) => {
+    if (!item || seen.has(item)) return false;
+    seen.add(item);
+    return true;
+  });
+}
+function isQwenModel(model) {
+  return String(model || '').trim().toLowerCase().startsWith('qwen');
+}
+function classifyModel(model) {
+  const lowered = String(model || '').trim().toLowerCase();
+  if (!lowered) return 'unknown';
+  if (lowered.includes('image-edit')) return 'image-edit';
+  if (lowered.includes('video')) return 'video';
+  if (lowered.includes('image')) return 'image';
+  return 'chat';
+}
+function setModelOptions(select, models, preferredModel) {
+  const previous = String(select.value || '').trim();
+  const nextModels = uniqueModels(models);
+  select.innerHTML = '';
+  nextModels.forEach((model) => {
+    const option = document.createElement('option');
+    option.value = model;
+    option.textContent = model;
+    select.appendChild(option);
+  });
+  if (!nextModels.length) return;
+  const nextValue = nextModels.includes(previous)
+    ? previous
+    : (nextModels.includes(preferredModel) ? preferredModel : nextModels[0]);
+  select.value = nextValue;
+}
+async function fetchAvailableModels(apiKey) {
+  if (!apiKey) return [];
+  const res = await fetch('/v1/models', {
+    cache: 'no-store',
+    headers: { Authorization: `Bearer ${apiKey}` },
+  });
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return Array.isArray(data?.data) ? data.data : [];
+}
+function buildChatModels(items) {
+  const ids = items.map((item) => String(item?.id || '').trim());
+  return uniqueModels(ids.filter((id) => classifyModel(id) === 'chat'));
+}
+function buildImageModels(items) {
+  const ids = items.map((item) => String(item?.id || '').trim());
+  const grokImageModels = ids.filter((id) => classifyModel(id) === 'image');
+  const hasQwenModels = ids.some((id) => isQwenModel(id));
+  return uniqueModels([
+    ...grokImageModels,
+    ...(hasQwenModels ? QWEN_IMAGE_MODELS : []),
+  ]);
+}
+async function refreshModelOptions() {
+  const chatKey = document.getElementById('chat-key').value.trim();
+  const imageKey = document.getElementById('image-key').value.trim();
+  const cache = new Map();
+  const load = async (key) => {
+    if (!key) return [];
+    if (!cache.has(key)) {
+      cache.set(key, fetchAvailableModels(key).catch(() => null));
+    }
+    return cache.get(key);
+  };
+  const [chatItems, imageItems] = await Promise.all([load(chatKey), load(imageKey)]);
+  const chatModels = buildChatModels(chatItems || []);
+  const imageModels = buildImageModels(imageItems || []);
+  setModelOptions(
+    document.getElementById('chat-model'),
+    chatModels.length ? chatModels : CHAT_FALLBACK_MODELS,
+    'grok-4.20-0309',
+  );
+  setModelOptions(
+    document.getElementById('image-model'),
+    imageModels.length ? imageModels : IMAGE_FALLBACK_MODELS,
+    'grok-imagine-image-lite',
+  );
+}
 async function callAPI(path, key, payload) {
   const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) }, body: JSON.stringify(payload) });
   const text = await res.text();
@@ -87,6 +195,12 @@ async function callAPI(path, key, payload) {
   const key = await adminKey.get();
   if (!key || !await verifyKey(ADMIN_API + '/verify', key).catch(() => false)) return location.href = '/admin/login';
   await fillDefaultKeys().catch(() => {});
+  await refreshModelOptions().catch(() => {});
+  ['chat-key', 'image-key'].forEach((id) => {
+    const input = document.getElementById(id);
+    input.addEventListener('change', () => { void refreshModelOptions(); });
+    input.addEventListener('blur', () => { void refreshModelOptions(); });
+  });
   document.getElementById('btn-chat').onclick = async () => {
     const output = document.getElementById('chat-output');
     output.textContent = '请求中...';
