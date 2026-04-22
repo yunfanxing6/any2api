@@ -32,7 +32,7 @@
   <div class="page-hd">
     <div>
       <div class="page-title">测试中心</div>
-      <div class="page-sub">统一测试 Grok / Qwen 的聊天和图片能力。默认使用第一个全局 API Key，也可手动指定。</div>
+      <div class="page-sub">统一测试 Grok / Qwen / ChatGPT2API 的聊天和图片能力。默认使用第一个全局 API Key，也可手动指定。</div>
     </div>
   </div>
 
@@ -43,7 +43,7 @@
       <div class="field"><label>模型</label><select id="chat-model"><option>grok-4.20-0309-non-reasoning</option><option>grok-4.20-0309</option><option>grok-4.20-0309-reasoning</option><option>qwen3.6-plus:auto</option><option>qwen3.6-plus:fast</option><option>qwen3.6-plus:thinking</option><option>qwen3.5-plus:auto</option><option>qwen3.5-plus:fast</option><option>qwen3.5-plus:thinking</option><option>qwen3.5-omni-plus</option></select></div>
       <div class="field"><label>消息</label><textarea id="chat-message">Reply with exactly: ok</textarea></div>
       <button class="btn btn-primary" id="btn-chat">发送聊天请求</button>
-      <div class="muted" style="margin-top:10px;">调用 <code>/v1/chat/completions</code></div>
+      <div class="muted" style="margin-top:10px;">调用 <code>/v1/chat/completions</code>。若选择 <code>gpt-image-*</code>，请填写图片场景 Prompt。</div>
       <div class="output" id="chat-output" style="margin-top:12px;">等待请求...</div>
     </section>
 
@@ -87,9 +87,13 @@ const CHAT_FALLBACK_MODELS = [
   'qwen3.5-plus:fast',
   'qwen3.5-plus:thinking',
   'qwen3.5-omni-plus',
+  'gpt-image-1',
+  'gpt-image-2',
 ];
 const IMAGE_FALLBACK_MODELS = [
   'grok-imagine-image-lite',
+  'gpt-image-1',
+  'gpt-image-2',
   'qwen3.6-plus',
   'qwen-image',
   'qwen-image-plus',
@@ -111,6 +115,9 @@ function uniqueModels(models) {
 }
 function isQwenModel(model) {
   return String(model || '').trim().toLowerCase().startsWith('qwen');
+}
+function isChatgptImageModel(model) {
+  return String(model || '').trim().toLowerCase().startsWith('gpt-image-');
 }
 function classifyModel(model) {
   const lowered = String(model || '').trim().toLowerCase();
@@ -148,7 +155,7 @@ async function fetchAvailableModels(apiKey) {
 }
 function buildChatModels(items) {
   const ids = items.map((item) => String(item?.id || '').trim());
-  return uniqueModels(ids.filter((id) => classifyModel(id) === 'chat'));
+  return uniqueModels(ids.filter((id) => classifyModel(id) === 'chat' || isChatgptImageModel(id)));
 }
 function buildImageModels(items) {
   const ids = items.map((item) => String(item?.id || '').trim());

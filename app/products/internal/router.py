@@ -21,6 +21,8 @@ def _detect_provider(model_name: str) -> str:
     lowered = model_name.lower()
     if lowered.startswith("qwen"):
         return "qwen"
+    if lowered.startswith("gpt-image-"):
+        return "chatgpt2api"
     if lowered.startswith("grok"):
         return "grok"
     return "unknown"
@@ -76,10 +78,21 @@ async def _qwen_accounts(request: Request) -> list[dict[str, Any]]:
         return []
 
 
+async def _chatgpt_summary(request: Request) -> dict:
+    provider = getattr(request.app.state, "chatgpt_provider", None)
+    if provider is None:
+        return {"enabled": False, "connected": False}
+    try:
+        return await provider.summary()
+    except Exception as exc:
+        return {"enabled": True, "connected": False, "error": str(exc)}
+
+
 @router.get("/health", tags=[_TAG_INTERNAL])
 async def internal_health(request: Request):
     snapshot = await _runtime_snapshot(request)
     qwen = await _qwen_summary(request)
+    chatgpt = await _chatgpt_summary(request)
     return {
         "status": "ok",
         "service": {
@@ -92,6 +105,7 @@ async def internal_health(request: Request):
         },
         "providers": {
             "qwen": qwen,
+            "chatgpt2api": chatgpt,
         },
     }
 
@@ -187,6 +201,7 @@ async def list_internal_accounts(request: Request):
 async def providers_summary(request: Request):
     snapshot = await _runtime_snapshot(request)
     qwen = await _qwen_summary(request)
+    chatgpt = await _chatgpt_summary(request)
     model_items = model_registry.list_enabled()
 
     model_counts: Counter[str] = Counter()
@@ -212,6 +227,10 @@ async def providers_summary(request: Request):
     if isinstance(qwen_accounts, dict):
         total_accounts += int(qwen_accounts.get("total", 0) or 0)
 
+    chatgpt_accounts = chatgpt.get("accounts", {}) if isinstance(chatgpt, dict) else {}
+    if isinstance(chatgpt_accounts, dict):
+        total_accounts += int(chatgpt_accounts.get("total", 0) or 0)
+
     return Response(
         content=orjson.dumps(
             {
@@ -234,6 +253,7 @@ async def providers_summary(request: Request):
                 },
                 "provider_status": {
                     "qwen": qwen,
+                    "chatgpt2api": chatgpt,
                 },
             }
         ),

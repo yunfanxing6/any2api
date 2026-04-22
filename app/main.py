@@ -31,7 +31,7 @@ from app.platform.meta import get_project_version
 from app.platform.paths import data_path
 from app.platform.auth.middleware import get_internal_key
 from app.platform.auth.key_registry import registry as api_key_registry
-from app.providers import create_embedded_qwen_provider
+from app.providers import create_chatgpt2api_provider, create_embedded_qwen_provider
 from app.providers.qwen_embed import _qwen_runtime_settings_from_config
 
 
@@ -207,6 +207,21 @@ async def lifespan(app: FastAPI):
     elif qwen_provider is not None:
         logger.warning("embedded qwen provider unavailable: error={}", qwen_provider.error)
 
+    # 7. Initialise chatgpt2api provider.
+    chatgpt_provider = create_chatgpt2api_provider()
+    app.state.chatgpt_provider = chatgpt_provider
+    try:
+        await chatgpt_provider.start()
+        settings = chatgpt_provider.settings_payload()
+        logger.info(
+            "chatgpt2api provider initialised: enabled={} configured={} base_url={}",
+            settings["enabled"],
+            settings["configured"],
+            settings["base_url"] or "-",
+        )
+    except Exception as exc:
+        logger.exception("chatgpt2api provider startup failed: error={}", exc)
+
     logger.info("application startup completed")
     yield
 
@@ -230,6 +245,13 @@ async def lifespan(app: FastAPI):
             await qwen_provider.stop()
         except Exception as exc:
             logger.warning("embedded qwen provider shutdown failed: error={}", exc)
+
+    chatgpt_provider = getattr(app.state, "chatgpt_provider", None)
+    if chatgpt_provider is not None:
+        try:
+            await chatgpt_provider.stop()
+        except Exception as exc:
+            logger.warning("chatgpt2api provider shutdown failed: error={}", exc)
 
     set_refresh_scheduler(None)
     set_refresh_scheduler_leader(False)

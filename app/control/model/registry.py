@@ -41,6 +41,8 @@ MODELS: tuple[ModelSpec, ...] = (
 
     # Basic+
     ModelSpec("grok-imagine-image-lite",                ModeId.FAST,   Tier.BASIC, Capability.IMAGE,      True, "Grok Imagine Image Lite"),
+    ModelSpec("gpt-image-1",                            ModeId.AUTO,   Tier.BASIC, Capability.IMAGE,      True, "ChatGPT Image 1"),
+    ModelSpec("gpt-image-2",                            ModeId.AUTO,   Tier.BASIC, Capability.IMAGE,      True, "ChatGPT Image 2"),
     # Super+
     ModelSpec("grok-imagine-image",                     ModeId.AUTO,   Tier.SUPER, Capability.IMAGE,      True, "Grok Imagine Image"),
     ModelSpec("grok-imagine-image-pro",                 ModeId.AUTO,   Tier.SUPER, Capability.IMAGE,      True, "Grok Imagine Image Pro"),

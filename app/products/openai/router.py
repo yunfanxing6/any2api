@@ -16,7 +16,7 @@ from app.platform.logging.logger import logger
 from app.platform.storage import image_files_dir, video_files_dir
 from app.control.model import registry as model_registry
 from app.control.model.spec import ModelSpec
-from app.providers import is_qwen_model_name
+from app.providers import is_chatgpt_model_name, is_qwen_model_name
 from .schemas import (
     ChatCompletionRequest,
     ImageGenerationRequest,
@@ -64,8 +64,16 @@ def _qwen_provider(request: Request):
     return getattr(request.app.state, "qwen_provider", None)
 
 
+def _chatgpt_provider(request: Request):
+    return getattr(request.app.state, "chatgpt_provider", None)
+
+
 def _is_qwen_model(model_name: str) -> bool:
     return is_qwen_model_name(model_name)
+
+
+def _is_chatgpt_model(model_name: str) -> bool:
+    return is_chatgpt_model_name(model_name)
 
 
 def _request_allowed_providers(request: Request) -> set[str] | None:
@@ -77,7 +85,19 @@ def _request_allowed_providers(request: Request) -> set[str] | None:
 
 
 def _model_provider(model_name: str) -> str:
-    return "qwen" if _is_qwen_model(model_name) else "grok"
+    if _is_qwen_model(model_name):
+        return "qwen"
+    if _is_chatgpt_model(model_name):
+        return "chatgpt2api"
+    return "grok"
+
+
+def _model_owner(model_name: str) -> str:
+    if _is_qwen_model(model_name):
+        return "qwen"
+    if _is_chatgpt_model(model_name):
+        return "chatgpt2api"
+    return "xai"
 
 
 async def _model_available(request: Request, spec: ModelSpec) -> bool:
@@ -88,6 +108,11 @@ async def _model_available(request: Request, spec: ModelSpec) -> bool:
     if _is_qwen_model(spec.model_name):
         provider = _qwen_provider(request)
         return bool(provider is not None and provider.is_ready())
+    if _is_chatgpt_model(spec.model_name):
+        provider = _chatgpt_provider(request)
+        if provider is None:
+            return False
+        return spec.model_name in set(await provider.supported_model_ids())
     pools = await _available_pools(request)
     return _model_available_for_pools(spec, pools)
 
@@ -96,6 +121,13 @@ def _require_qwen_provider(request: Request):
     provider = _qwen_provider(request)
     if provider is None or not provider.is_ready():
         raise ValidationError("Qwen provider is unavailable", param="model")
+    return provider
+
+
+def _require_chatgpt_provider(request: Request):
+    provider = _chatgpt_provider(request)
+    if provider is None or not provider.is_configured():
+        raise ValidationError("chatgpt2api provider is unavailable", param="model")
     return provider
 
 
@@ -115,7 +147,7 @@ async def list_models(request: Request):
                 "id":       m.model_name,
                 "object":   "model",
                 "created":  int(time.time()),
-                "owned_by": "qwen" if _is_qwen_model(m.model_name) else "xai",
+                "owned_by": _model_owner(m.model_name),
                 "name":     m.public_name,
             }
         )
@@ -135,7 +167,7 @@ async def get_model_endpoint(model_id: str, request: Request):
         "id":       spec.model_name,
         "object":   "model",
         "created":  int(time.time()),
-        "owned_by": "qwen" if _is_qwen_model(spec.model_name) else "xai",
+        "owned_by": _model_owner(spec.model_name),
         "name":     spec.public_name,
     })
 
@@ -272,6 +304,10 @@ async def chat_completions_endpoint(req: ChatCompletionRequest, request: Request
             return provider.forward_stream("/v1/chat/completions", body)
         return await provider.forward_json("/v1/chat/completions", body)
 
+    if _is_chatgpt_model(req.model):
+        provider = _require_chatgpt_provider(request)
+        return await provider.forward_json("/v1/chat/completions", req.model_dump(exclude_none=True))
+
     spec     = model_registry.get(req.model)
     if spec is None:
         raise ValidationError(
@@ -392,9 +428,13 @@ async def _safe_sse_responses(stream) -> AsyncGenerator[str, None]:
 
 
 @router.post("/responses", tags=[_TAG_RESPONSES], dependencies=[Depends(verify_api_key)])
-async def responses_endpoint(req: ResponsesCreateRequest):
+async def responses_endpoint(req: ResponsesCreateRequest, request: Request):
     from app.platform.config.snapshot import get_config
     from app.platform.errors import ValidationError as _ValidationError
+
+    if _is_chatgpt_model(req.model):
+        provider = _require_chatgpt_provider(request)
+        return await provider.forward_json("/v1/responses", req.model_dump(exclude_none=True))
 
     if _is_qwen_model(req.model):
         raise _ValidationError(
@@ -454,6 +494,10 @@ async def responses_endpoint(req: ResponsesCreateRequest):
 async def image_generations(req: ImageGenerationRequest, request: Request):
     if _is_qwen_model(req.model):
         provider = _require_qwen_provider(request)
+        return await provider.forward_json("/v1/images/generations", req.model_dump(exclude_none=True))
+
+    if _is_chatgpt_model(req.model):
+        provider = _require_chatgpt_provider(request)
         return await provider.forward_json("/v1/images/generations", req.model_dump(exclude_none=True))
 
     spec = model_registry.get(req.model)
@@ -534,7 +578,28 @@ async def image_edits(
     n: Annotated[int, Form()] = 1,
     size: Annotated[str, Form()] = "1024x1024",
     response_format: Annotated[str, Form()] = "url",
+    request: Request = None,
 ):
+    if _is_chatgpt_model(model):
+        provider = _require_chatgpt_provider(request)
+        if mask is not None:
+            raise ValidationError("mask is not supported yet", param="mask")
+        data = [("model", model), ("prompt", prompt), ("n", str(n))]
+        files = []
+        for index, item in enumerate(image):
+            raw = await item.read()
+            if not raw:
+                raise ValidationError("Uploaded image cannot be empty", param=f"image.{index}")
+            files.append((
+                "image",
+                (
+                    item.filename or f"image-{index}.png",
+                    raw,
+                    item.content_type or "application/octet-stream",
+                ),
+            ))
+        return await provider.forward_form("/v1/images/edits", data=data, files=files)
+
     spec = model_registry.get(model)
     if spec is None or not spec.enabled or not spec.is_image_edit():
         raise ValidationError(f"Model {model!r} is not an image-edit model", param="model")

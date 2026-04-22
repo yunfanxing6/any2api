@@ -465,6 +465,21 @@ const SCHEMA_DEF = [
     ]
   },
   {
+    id: 'chatgpt2api', label: 'ChatGPT2API',
+    groups: [
+      {
+        title: 'ChatGPT2API 运行配置',
+        section: 'providers.chatgpt2api',
+        fields: [
+          { key: 'enabled', label: '启用 ChatGPT2API Provider', type: 'bool', desc: '开启后会将 chatgpt2api 的 `gpt-image-*` 模型并入 Any2API 的统一 OpenAI 路由。' },
+          { key: 'base_url', label: '上游地址', type: 'text', wide: true, desc: 'chatgpt2api 服务地址。Docker 同网段部署时可直接使用 `http://chatgpt2api`。' },
+          { key: 'auth_key', label: '上游鉴权 Key', type: 'password', desc: '对应 chatgpt2api 的 `Authorization: Bearer <auth-key>`。若修改此项，需同时更新 sidecar 环境变量并重启。' },
+          { key: 'timeout_sec', label: '请求超时（秒）', type: 'number', desc: 'chatgpt2api 请求的统一超时时间。该 provider 当前主要服务于图片生成、图片编辑，以及图片场景的 chat/responses 兼容接口。' },
+        ]
+      },
+    ]
+  },
+  {
     id: 'proxy', label: '网络代理', labelKey: 'config.schema.tabs.proxy',
     groups: [
       {

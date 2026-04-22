@@ -14,7 +14,7 @@ from app.platform.paths import data_path
 from app.platform.runtime.clock import now_ms
 
 
-ALL_PROVIDERS = ("grok", "qwen")
+ALL_PROVIDERS = ("grok", "qwen", "chatgpt2api")
 ALL_SCOPES = ("models", "chat", "responses", "images", "videos", "files", "anthropic")
 
 

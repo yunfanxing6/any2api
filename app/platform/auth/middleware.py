@@ -158,6 +158,8 @@ def _infer_provider_from_model(model: str | None) -> str | None:
         return "grok"
     if lowered.startswith("qwen"):
         return "qwen"
+    if lowered.startswith("gpt-image-"):
+        return "chatgpt2api"
 
     aliases = get_config("providers.qwen.model_aliases", {})
     if isinstance(aliases, dict):

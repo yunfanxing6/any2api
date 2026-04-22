@@ -30,6 +30,15 @@ services:
       - ./logs:/app/logs
     restart: unless-stopped
 
+  chatgpt2api:
+    container_name: chatgpt2api
+    image: ghcr.io/basketikun/chatgpt2api:latest
+    environment:
+      CHATGPT2API_AUTH_KEY: ${CHATGPT2API_AUTH_KEY:-chatgpt2api}
+    volumes:
+      - ./data/chatgpt2api:/app/data
+    restart: unless-stopped
+
   # 如果出口 IP 不干净，可取消以下注释使用 Warp 作为落地代理
   # 启用后将 proxy.base_proxy_url 设为 socks5://warp:1080
   # warp:
