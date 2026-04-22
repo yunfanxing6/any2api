@@ -20,6 +20,7 @@ from backend.core.request_logging import configure_logging, request_context
 from backend.services.qwen_client import QwenClient
 from backend.services.file_store import LocalFileStore
 from backend.services.context_offload import ContextOffloader
+from backend.services.chat_id_pool import ChatIdPool
 from backend.services.upstream_file_uploader import UpstreamFileUploader
 import backend.api.models as models
 from backend.api import admin, v1_chat, probes, anthropic, gemini, embeddings, images, files_api
@@ -61,10 +62,25 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(garbage_collect_chats(app))
         asyncio.create_task(context_cleanup_loop(app))
 
+        app.state.chat_id_pool = ChatIdPool(
+            app.state.qwen_client,
+            target_per_account=5,
+            ttl_seconds=600,
+            default_model="qwen3.6-plus",
+        )
+        app.state.qwen_executor.chat_id_pool = app.state.chat_id_pool
+        await app.state.chat_id_pool.start()
+
     yield
 
     with request_context(surface="shutdown"):
         log.info("正在关闭网关服务...")
+        pool = getattr(app.state, "chat_id_pool", None)
+        if pool is not None:
+            await pool.stop()
+        client = getattr(app.state, "qwen_client", None)
+        if client is not None:
+            await client.aclose()
 
 app = FastAPI(title="qwen2API Enterprise Gateway", version="2.0.0", lifespan=lifespan)
 

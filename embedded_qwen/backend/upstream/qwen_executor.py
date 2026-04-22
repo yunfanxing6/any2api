@@ -17,9 +17,21 @@ class QwenExecutor:
         self.engine = engine
         self.account_pool = account_pool
         self.auth_resolver = AuthResolver(account_pool) if account_pool is not None else None
+        self.chat_id_pool = None
 
     async def create_chat(self, token: str, model: str, chat_type: str = "t2t") -> str:
         upstream_model = normalize_upstream_model(model)
+        if self.chat_id_pool is not None and self.account_pool is not None:
+            try:
+                acc = next((account for account in self.account_pool.accounts if account.token == token), None)
+                if acc is not None:
+                    cached = await self.chat_id_pool.acquire(acc.email, upstream_model)
+                    if cached:
+                        log.info(f"[Executor] prewarmed chat_id hit account={acc.email} chat_id={cached}")
+                        return cached
+            except Exception as exc:
+                log.debug(f"[Executor] chat_id_pool lookup failed: {exc}")
+
         request_fn = getattr(self.engine, "_request_json", None) or getattr(self.engine, "api_call", None)
         if request_fn is None:
             raise Exception("request transport unavailable")

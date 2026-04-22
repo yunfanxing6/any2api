@@ -18,6 +18,20 @@ from backend.toolcall.stream_state import StreamingToolCallState
 
 log = logging.getLogger("qwen2api.runtime")
 
+_TOXIC_REFUSAL_RE = re.compile(
+    r"Tool\s+\S+\s+(?:does\s+not\s+exists?|is\s+not\s+(?:available|registered))"
+    r"|I\s+cannot\s+execute\s+this\s+tool"
+    r"|I[''\u2019]?\s*m\s+sorry[,. ]"
+    r"|I\s+cannot\s+(?:help|assist|proceed|continue|support|perform)"
+    r"|I[''\u2019]?m\s+not\s+(?:able|designed)\s+to"
+    r"|unable\s+to\s+(?:proceed|continue|perform|complete)"
+    r"|该工具.{0,8}?不存在|工具.{0,12}?不存在"
+    r"|我(?:无法|不能|不可以)(?:继续|进行|支持|完成|操作|执行)"
+    r"|无法(?:进行|支持|完成|执行).{0,10}?操作"
+    r"|抱歉.{0,20}?(?:无法|不能|不支持)",
+    re.IGNORECASE,
+)
+
 
 @dataclass(slots=True)
 class RuntimeAttemptState:
@@ -497,6 +511,15 @@ async def collect_completion_run(
 
         if phase == "answer" and content:
             answer_fragments.append(content)
+
+            if request.tools and not emitted_visible_output and len("".join(answer_fragments)) >= 20:
+                early_answer = "".join(answer_fragments).strip()
+                if _TOXIC_REFUSAL_RE.search(early_answer):
+                    toxic_blocked = extract_blocked_tool_names(early_answer, request.tool_names)
+                    blocked_name = toxic_blocked[0] if toxic_blocked else "unknown"
+                    log.warning("[Collect] toxic refusal intercepted: %r", early_answer[:80])
+                    return _finalize_result(reason=f"blocked_tool_name:{blocked_name}")
+
             emitted_visible_output = True
             if not first_event_marked:
                 metrics.mark("first_event", float(len(raw_events)))

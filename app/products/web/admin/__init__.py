@@ -155,6 +155,8 @@ async def get_config_endpoint():
 
 @router.post("/config", tags=[_TAG_ADMIN_SYSTEM])
 async def update_config(req: ConfigPatchRequest, request: Request):
+    from app.control.account.runtime import reconcile_refresh_runtime
+
     patch = _sanitize_proxy_config(req.root)
     _ensure_runtime_patch_allowed(patch)
     await config.update(patch)
@@ -177,7 +179,11 @@ async def update_config(req: ConfigPatchRequest, request: Request):
             await provider.stop()
             request.app.state.qwen_provider = None
 
-    return {"status": "success", "message": "配置已更新"}
+    return {
+        "status": "success",
+        "message": "配置已更新",
+        "selection_strategy": reconcile_refresh_runtime(),
+    }
 
 
 @router.get("/storage", tags=[_TAG_ADMIN_SYSTEM])
@@ -187,6 +193,7 @@ async def get_storage_mode():
 
 @router.get("/status", tags=[_TAG_ADMIN_SYSTEM])
 async def runtime_status():
+    from app.control.account.runtime import reconcile_refresh_runtime
     from app.dataplane.account import _directory
     if _directory is None:
         raise AppError(
@@ -200,6 +207,7 @@ async def runtime_status():
             "status": "ok",
             "size": _directory.size,
             "revision": _directory.revision,
+            "selection_strategy": reconcile_refresh_runtime(),
         }),
         media_type="application/json",
     )

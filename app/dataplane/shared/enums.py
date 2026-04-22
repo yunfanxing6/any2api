@@ -35,6 +35,8 @@ POOL_STR_TO_ID: dict[str, int] = {
     "heavy": int(PoolId.HEAVY),
 }
 
+POOL_ID_TO_STR: dict[int, str] = {v: k for k, v in POOL_STR_TO_ID.items()}
+
 STATUS_STR_TO_ID: dict[str, int] = {
     "active":   int(StatusId.ACTIVE),
     "cooling":  int(StatusId.COOLING),
@@ -51,5 +53,5 @@ ALL_MODE_IDS: tuple[int, ...] = (
 
 __all__ = [
     "ModeId", "PoolId", "StatusId",
-    "POOL_STR_TO_ID", "STATUS_STR_TO_ID", "ALL_MODE_IDS",
+    "POOL_STR_TO_ID", "POOL_ID_TO_STR", "STATUS_STR_TO_ID", "ALL_MODE_IDS",
 ]

@@ -56,7 +56,15 @@ class OpenAIStreamTranslator:
         if not text_chunk:
             return False
         lowered = text_chunk.lower()
-        common_markers = ("tool does not exists", "</think>", "function.name:", "##tool_call##", "##end_call##")
+        common_markers = (
+            "tool does not exists",
+            "</think>",
+            "function.name:",
+            "##tool_call##",
+            "##end_call##",
+            '"tool_calls"',
+            '"function":',
+        )
         if any(marker in lowered for marker in common_markers):
             return True
         if self.allowed_tool_names:
@@ -95,6 +103,12 @@ class OpenAIStreamTranslator:
         self.pending_chunks.append(chunk)
         self.pending_content_chunks.append(chunk)
 
+    def _emit_reasoning_chunk(self, text_chunk: str) -> None:
+        chunk = (
+            f"data: {json.dumps({'id': self.completion_id, 'object': 'chat.completion.chunk', 'created': self.created, 'model': self.model_name, 'choices': [{'index': 0, 'delta': {'reasoning_content': text_chunk}, 'finish_reason': None}]}, ensure_ascii=False)}\n\n"
+        )
+        self.pending_chunks.append(chunk)
+
     def _discard_pending_content_chunks(self) -> None:
         if not self.pending_content_chunks:
             return
@@ -106,6 +120,7 @@ class OpenAIStreamTranslator:
         self._ensure_role_chunk()
 
         if text_chunk and evt.get("phase") in ("think", "thinking_summary"):
+            self._emit_reasoning_chunk(text_chunk)
             return
 
         if text_chunk and evt.get("phase") == "answer":

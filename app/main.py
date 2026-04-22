@@ -107,7 +107,12 @@ async def lifespan(app: FastAPI):
 
     # 2. Initialise account repository and bootstrap runtime table.
     from app.control.account.backends.factory import create_repository, describe_repository_target
-    from app.control.account.runtime import set_refresh_service
+    from app.control.account.runtime import (
+        reconcile_refresh_runtime,
+        set_refresh_scheduler,
+        set_refresh_scheduler_leader,
+        set_refresh_service,
+    )
     from app.control.account.scheduler import get_account_refresh_scheduler
     from app.dataplane.account import get_account_directory
 
@@ -165,17 +170,24 @@ async def lifespan(app: FastAPI):
     #    Uses an advisory file lock so exactly one process runs the heavy
     #    upstream quota-fetch loop regardless of worker count.
     from app.control.account.refresh import AccountRefreshService
+    refresh_enabled = _config.get_bool("account.refresh.enabled", False)
     refresh_svc = AccountRefreshService(repo)
     set_refresh_service(refresh_svc)
     app.state.refresh_service = refresh_svc
 
     is_leader = _try_acquire_scheduler_lock()
     scheduler = get_account_refresh_scheduler(refresh_svc)
-    if is_leader:
-        scheduler.start()
-        logger.info("scheduler leader: pid={} active_sync_s={} idle_sync_s={}", os.getpid(), _SYNC_ACTIVE_INTERVAL, _SYNC_IDLE_INTERVAL)
+    set_refresh_scheduler(scheduler)
+    set_refresh_scheduler_leader(is_leader)
+    app.state.account_refresh_scheduler = scheduler
+    app.state.account_refresh_is_leader = is_leader
+    strategy_name = reconcile_refresh_runtime(refresh_enabled)
+    if is_leader and strategy_name == "quota":
+        logger.info("scheduler leader: pid={} strategy=quota active_sync_s={} idle_sync_s={}", os.getpid(), _SYNC_ACTIVE_INTERVAL, _SYNC_IDLE_INTERVAL)
+    elif is_leader:
+        logger.info("scheduler leader: pid={} strategy=random (scheduler idle) active_sync_s={} idle_sync_s={}", os.getpid(), _SYNC_ACTIVE_INTERVAL, _SYNC_IDLE_INTERVAL)
     else:
-        logger.info("scheduler follower: pid={} active_sync_s={} idle_sync_s={}", os.getpid(), _SYNC_ACTIVE_INTERVAL, _SYNC_IDLE_INTERVAL)
+        logger.info("scheduler follower: pid={} strategy={} active_sync_s={} idle_sync_s={}", os.getpid(), strategy_name, _SYNC_ACTIVE_INTERVAL, _SYNC_IDLE_INTERVAL)
 
     # 5. Initialise proxy directory.
     from app.control.proxy import get_proxy_directory
@@ -219,6 +231,8 @@ async def lifespan(app: FastAPI):
         except Exception as exc:
             logger.warning("embedded qwen provider shutdown failed: error={}", exc)
 
+    set_refresh_scheduler(None)
+    set_refresh_scheduler_leader(False)
     set_refresh_service(None)
     await repo.close()
     logger.info("application shutdown completed")
@@ -266,7 +280,10 @@ def create_app() -> FastAPI:
     # Ensure config is loaded on every request.
     @app.middleware("http")
     async def _ensure_config(request: Request, call_next):
+        from app.control.account.runtime import reconcile_refresh_runtime
+
         await _config.load()
+        reconcile_refresh_runtime()
         response = await call_next(request)
         record = getattr(request.state, "api_key_record", None)
         if (

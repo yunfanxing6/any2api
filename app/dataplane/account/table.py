@@ -72,8 +72,11 @@ class AccountRuntimeTable:
     last_use_at_by_idx:  "array.array[int]" = field(default_factory=lambda: array.array("L"))
     last_fail_at_by_idx: "array.array[int]" = field(default_factory=lambda: array.array("L"))
 
+    # --- Per-account cooldown (random strategy only; uint32 epoch-seconds; 0 = not cooling) ---
+    cooling_until_s_by_idx: "array.array[int]" = field(default_factory=lambda: array.array("L"))
+
     # --- Pre-computed selection indexes ---
-    # (pool_id, mode_id) → set of idx with quota > 0 and status == ACTIVE
+    # (pool_id, mode_id) → set of idx with a supported mode and status == ACTIVE
     mode_available: dict[tuple[int, int], set[int]] = field(default_factory=dict)
     # tag string → set of idx
     tag_idx: dict[str, set[int]] = field(default_factory=dict)
@@ -104,7 +107,7 @@ class AccountRuntimeTable:
         if status_id != int(StatusId.ACTIVE):
             return
         for mode_id in ALL_MODE_IDS:
-            if self._quota_col(mode_id)[idx] > 0:
+            if self._quota_col(mode_id)[idx] >= 0:
                 self.mode_available.setdefault((pool_id, mode_id), set()).add(idx)
 
     def _remove_from_indexes(self, idx: int) -> None:
@@ -165,6 +168,7 @@ class AccountRuntimeTable:
         self.health_by_idx.append(health)
         self.last_use_at_by_idx.append(last_use_s)
         self.last_fail_at_by_idx.append(last_fail_s)
+        self.cooling_until_s_by_idx.append(0)
         self.size += 1
         self._add_to_indexes(idx)
         self._add_to_tag_idx(idx, tags)

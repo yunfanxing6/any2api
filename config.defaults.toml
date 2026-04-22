@@ -92,11 +92,16 @@ on_codes = "429,401,503"
 
 
 [account.refresh]
+enabled = true
 basic_interval_sec = 36000   # basic 号池刷新周期（秒），默认 10 h
 super_interval_sec = 7200    # super 号池刷新周期（秒），默认 2 h
 heavy_interval_sec = 7200    # heavy 号池刷新周期（秒），默认 2 h
 usage_concurrency = 50
 on_demand_min_interval_sec = 300
+
+
+[account.selection]
+max_inflight = 8
 
 
 # ==================== 对话配置 ====================

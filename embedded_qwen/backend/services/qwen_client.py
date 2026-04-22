@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 from typing import AsyncIterator
 
 import httpx
@@ -14,10 +15,30 @@ log = logging.getLogger("qwen2api.client")
 
 
 class QwenClient:
+    _UPSTREAM_MODELS_TTL = 300
+
     def __init__(self, account_pool: AccountPool):
         self.account_pool = account_pool
         self.auth_resolver = AuthResolver(account_pool) if account_pool is not None else None
         self.executor = QwenExecutor(self, account_pool)
+        self._upstream_models_cache: list[dict] = []
+        self._upstream_models_fetched_at = 0.0
+
+        limits = httpx.Limits(
+            max_connections=100,
+            max_keepalive_connections=20,
+            keepalive_expiry=30.0,
+        )
+        timeout = httpx.Timeout(connect=30.0, read=300.0, write=30.0, pool=30.0)
+        self._http_client = httpx.AsyncClient(
+            limits=limits,
+            timeout=timeout,
+            http2=True,
+            follow_redirects=True,
+        )
+
+    async def aclose(self) -> None:
+        await self._http_client.aclose()
 
     @staticmethod
     def _build_headers(token: str) -> dict[str, str]:
@@ -33,13 +54,13 @@ class QwenClient:
         }
 
     async def _request_json(self, method: str, path: str, token: str, body: dict | None = None, timeout: float = 30.0) -> dict:
-        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as hc:
-            resp = await hc.request(
-                method,
-                f"{BASE_URL}{path}",
-                headers=self._build_headers(token),
-                json=body,
-            )
+        resp = await self._http_client.request(
+            method,
+            f"{BASE_URL}{path}",
+            headers=self._build_headers(token),
+            json=body,
+            timeout=timeout,
+        )
         return {"status": resp.status_code, "body": resp.text}
 
     async def create_chat(self, token: str, model: str, chat_type: str = "t2t") -> str:
@@ -65,11 +86,11 @@ class QwenClient:
             return False
 
         try:
-            async with httpx.AsyncClient(timeout=15) as hc:
-                resp = await hc.get(
-                    f"{BASE_URL}/api/v1/auths/",
-                    headers=self._build_headers(token),
-                )
+            resp = await self._http_client.get(
+                f"{BASE_URL}/api/v1/auths/",
+                headers=self._build_headers(token),
+                timeout=15.0,
+            )
             if resp.status_code != 200:
                 return False
 
@@ -88,11 +109,11 @@ class QwenClient:
 
     async def list_models(self, token: str) -> list:
         try:
-            async with httpx.AsyncClient(timeout=10) as hc:
-                resp = await hc.get(
-                    f"{BASE_URL}/api/models",
-                    headers=self._build_headers(token),
-                )
+            resp = await self._http_client.get(
+                f"{BASE_URL}/api/models",
+                headers=self._build_headers(token),
+                timeout=10.0,
+            )
             if resp.status_code != 200:
                 return []
             try:
@@ -102,6 +123,30 @@ class QwenClient:
                 return []
         except Exception:
             return []
+
+    async def list_models_from_pool(self) -> list[dict]:
+        now = time.time()
+        if self._upstream_models_cache and (now - self._upstream_models_fetched_at) < self._UPSTREAM_MODELS_TTL:
+            return self._upstream_models_cache
+        if self.account_pool is None:
+            return []
+
+        acc = None
+        try:
+            acc = await self.account_pool.acquire_wait(timeout=5)
+            if not acc:
+                return []
+            models = await self.list_models(acc.token)
+            if models:
+                self._upstream_models_cache = models
+                self._upstream_models_fetched_at = now
+            return models
+        except Exception as exc:
+            log.warning(f"[list_models_from_pool] failed: {exc}")
+            return []
+        finally:
+            if acc is not None:
+                self.account_pool.release(acc)
 
     def _build_payload(self, chat_id: str, model: str, content: str, has_custom_tools: bool = False, files: list[dict] | None = None) -> dict:
         return build_chat_payload(chat_id, model, content, has_custom_tools, files=files)
@@ -114,26 +159,19 @@ class QwenClient:
             yield event
 
     async def stream_chat_once(self, token: str, chat_id: str, payload: dict) -> AsyncIterator[dict]:
-        # 降低read timeout，避免模型卡住时长时间等待
-        # connect: 连接超时30秒
-        # read: 读取超时120秒（2分钟内没有新数据就超时）
-        # write: 写入超时30秒
-        # pool: 连接池超时30秒
-        timeout = httpx.Timeout(connect=30.0, read=120.0, write=30.0, pool=30.0)
-        async with httpx.AsyncClient(timeout=timeout) as hc:
-            async with hc.stream(
-                "POST",
-                f"{BASE_URL}/api/v2/chat/completions?chat_id={chat_id}",
-                headers=self._build_headers(token),
-                json=payload,
-            ) as resp:
-                if resp.status_code != 200:
-                    yield {"status": resp.status_code, "body": await resp.aread()}
-                    return
-                async for chunk in resp.aiter_text():
-                    if chunk:
-                        yield {"chunk": chunk}
-                yield {"status": "streamed"}
+        async with self._http_client.stream(
+            "POST",
+            f"{BASE_URL}/api/v2/chat/completions?chat_id={chat_id}",
+            headers=self._build_headers(token),
+            json=payload,
+        ) as resp:
+            if resp.status_code != 200:
+                yield {"status": resp.status_code, "body": await resp.aread()}
+                return
+            async for chunk in resp.aiter_text():
+                if chunk:
+                    yield {"chunk": chunk}
+            yield {"status": "streamed"}
 
     async def chat_stream_events_with_retry(
         self,

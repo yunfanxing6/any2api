@@ -662,15 +662,15 @@ async def _run_video_with_account(
     if _acct_dir is None:
         raise RateLimitError("Account directory not initialised")
 
-    acct = await _acct_dir.reserve(
-        pool_candidates=spec.pool_candidates(),
-        mode_id=int(spec.mode_id),
+    acct = await _acct_dir.reserve_any(
+        spec.pool_candidates(),
         now_s_override=now_s(),
     )
     if acct is None:
         raise RateLimitError("No available accounts for video generation")
 
     token = acct.token
+    ws_mode_id = int(spec.mode_id)
     success = False
     fail_exc: BaseException | None = None
     try:
@@ -682,12 +682,10 @@ async def _run_video_with_account(
         raise
     finally:
         await _acct_dir.release(acct)
-        kind = FeedbackKind.SUCCESS if success else _feedback_kind(fail_exc) if fail_exc else FeedbackKind.SERVER_ERROR
-        await _acct_dir.feedback(token, kind, int(spec.mode_id))
-        if success:
-            asyncio.create_task(_quota_sync(token, int(spec.mode_id)))
-        else:
-            asyncio.create_task(_fail_sync(token, int(spec.mode_id), fail_exc))
+        if not success and fail_exc is not None:
+            kind = _feedback_kind(fail_exc)
+            if kind in (FeedbackKind.UNAUTHORIZED, FeedbackKind.FORBIDDEN):
+                await _acct_dir.feedback(token, kind, ws_mode_id)
 
 
 async def _put_video_job(job: _VideoJob) -> None:
@@ -741,15 +739,15 @@ async def _run_video_job(
         if _acct_dir is None:
             raise RateLimitError("Account directory not initialised")
 
-        acct = await _acct_dir.reserve(
-            pool_candidates=spec.pool_candidates(),
-            mode_id=int(spec.mode_id),
+        acct = await _acct_dir.reserve_any(
+            spec.pool_candidates(),
             now_s_override=now_s(),
         )
         if acct is None:
             raise RateLimitError("No available accounts for video generation")
 
         token = acct.token
+        ws_mode_id = int(spec.mode_id)
         success = False
         fail_exc: BaseException | None = None
         try:
@@ -777,12 +775,10 @@ async def _run_video_job(
             raise
         finally:
             await _acct_dir.release(acct)
-            kind = FeedbackKind.SUCCESS if success else _feedback_kind(fail_exc) if fail_exc else FeedbackKind.SERVER_ERROR
-            await _acct_dir.feedback(token, kind, int(spec.mode_id))
-            if success:
-                asyncio.create_task(_quota_sync(token, int(spec.mode_id)))
-            else:
-                asyncio.create_task(_fail_sync(token, int(spec.mode_id), fail_exc))
+            if not success and fail_exc is not None:
+                kind = _feedback_kind(fail_exc)
+                if kind in (FeedbackKind.UNAUTHORIZED, FeedbackKind.FORBIDDEN):
+                    await _acct_dir.feedback(token, kind, ws_mode_id)
 
         path = _save_video_bytes(raw, job.id)
         async with _VIDEO_JOBS_LOCK:

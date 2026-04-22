@@ -19,7 +19,7 @@ class ProxyRuntimeTable:
     egress_mode:    EgressMode    = EgressMode.DIRECT
     clearance_mode: ClearanceMode = ClearanceMode.NONE
     nodes:          list[EgressNode]                  = field(default_factory=list)
-    bundles:        dict[str, ClearanceBundle]         = field(default_factory=dict)
+    bundles:        dict[tuple[str, str], ClearanceBundle] = field(default_factory=dict)
 
     @property
     def node_count(self) -> int:

@@ -6,6 +6,8 @@ from typing import Any, cast
 
 from backend.adapter.standard_request import CLAUDE_CODE_OPENAI_PROFILE, OPENCLAW_OPENAI_PROFILE
 from backend.core.request_logging import get_request_context
+from backend.services.tool_arg_fixer import fix_tool_call_arguments
+from backend.services.tool_name_obfuscation import from_qwen_name
 from backend.toolcall.normalize import build_tool_name_registry, normalize_tool_name
 from backend.toolcall.parser import parse_tool_calls_detailed
 
@@ -80,6 +82,7 @@ def _extract_first_json_tool_call(text: str) -> str | None:
     markers = [
         '<tool_call>{"name"',
         '<tool_calls><tool_call>{"name"',
+        '{"tool_calls"',
         '{"name"',
         '"name":',
         '"name="',
@@ -298,16 +301,18 @@ def _parse_tool_calls(answer: str, tools: list, *, emit_logs: bool):
         if emit_logs:
             log.warning(message)
 
-    # 强制记录原始输入用于调试
-    log.info(f"[ToolParse] [{req_tag}] 原始回复({len(answer)}字): {answer[:500]!r}")
+    if emit_logs:
+        log.info(f"[ToolParse] [{req_tag}] 原始回复({len(answer)}字): {answer[:500]!r}")
 
     def _make_tool_block(name, input_data, prefix=""):
+        name = from_qwen_name(name)
         normalized_name = normalize_tool_name(name, tool_registry.values())
         cased_name = _normalize_tool_name_case(normalized_name, tool_names)
         if cased_name not in tool_names:
             _log_warning(f"[ToolParse] 工具名不匹配，回退为普通文本: name={name!r}, normalized={normalized_name!r}, cased={cased_name!r}, tools={tool_names}")
             return [{"type": "text", "text": answer}], "end_turn"
         coerced_input = _coerce_tool_input(cased_name, input_data, tools)
+        coerced_input = fix_tool_call_arguments(cased_name, coerced_input)
         tool_id = f"toolu_{uuid.uuid4().hex[:8]}"
         blocks = []
         if prefix:
@@ -484,6 +489,7 @@ class ToolSieve:
     def _find_tool_start(self, text: str) -> int:
         """查找工具调用开始位置"""
         markers = [
+            '{"tool_calls"',
             '{"name":',
             '<tool_call>',
             '##TOOL_CALL##',
@@ -568,7 +574,7 @@ class ToolSieve:
 
     def _looks_like_incomplete_tool_call(self, text: str) -> bool:
         """检查文本是否看起来像不完整的工具调用"""
-        markers = ['{"name":', '<tool_call>', '##TOOL_CALL##', 'function.name:']
+        markers = ['{"tool_calls"', '{"name":', '<tool_call>', '##TOOL_CALL##', 'function.name:']
         return any(marker in text for marker in markers)
 
     def has_tool_calls(self) -> bool:
@@ -615,5 +621,4 @@ def inject_format_reminder(prompt: str, tool_name: str, *, client_profile: str =
     if prompt.endswith("Assistant:"):
         return prompt[: -len("Assistant:")] + reminder + "\nAssistant:"
     return prompt + "\n\n" + reminder + "\nAssistant:"
-
 

@@ -25,25 +25,24 @@ async def list_models(request: Request):
     users_db = app.state.users_db
     client: QwenClient = app.state.qwen_client
 
-    auth = await resolve_auth_context(request, users_db)
-    token = auth.token
-    try:
-        upstream_models = await client.list_models(token)
-    except Exception:
-        upstream_models = []
+    await resolve_auth_context(request, users_db)
+    upstream_models = await client.list_models_from_pool()
 
     if upstream_models:
-        return JSONResponse({
-            "object": "list",
-            "data": [
-                {
-                    "id": item.get("id") or item.get("model") or item.get("name") or str(item),
-                    "object": "model",
-                    "owned_by": item.get("owned_by", "qwen2api"),
-                }
-                for item in upstream_models
-            ],
-        })
+        data: list[dict] = []
+        for item in upstream_models:
+            if not isinstance(item, dict):
+                continue
+            model_id = item.get("id") or item.get("model") or item.get("name")
+            if not model_id:
+                continue
+            data.append({
+                "id": model_id,
+                "object": "model",
+                "owned_by": item.get("owned_by", "qwen"),
+                "created": item.get("created_at") or 0,
+            })
+        return JSONResponse({"object": "list", "data": data})
     return JSONResponse(_build_model_list_payload())
 
 

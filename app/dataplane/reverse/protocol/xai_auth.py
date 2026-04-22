@@ -28,6 +28,7 @@ if TYPE_CHECKING:
 ACCEPT_TOS_URL = "https://accounts.x.ai/auth_mgmt.AuthManagement/SetTosAcceptedVersion"
 NSFW_MGMT_URL  = "https://grok.com/auth_mgmt.AuthManagement/UpdateUserFeatureControls"
 SET_BIRTH_URL  = "https://grok.com/rest/auth/set-birth-date"
+ACCOUNTS_ORIGIN = "https://accounts.x.ai"
 
 # ------------------------------------------------------------------
 # Payload builders
@@ -94,7 +95,11 @@ async def _grpc_call(
 
     if not shared:
         proxy = await get_proxy_runtime()
-        lease = await proxy.acquire(scope=ProxyScope.APP, kind=RequestKind.HTTP)
+        lease = await proxy.acquire(
+            scope=ProxyScope.APP,
+            kind=RequestKind.HTTP,
+            clearance_origin=origin,
+        )
 
     try:
         _, trailers = await post_grpc_web(
@@ -142,8 +147,8 @@ async def accept_tos(token: str) -> GrpcStatus:
         token,
         build_accept_tos_payload(),
         label   = "accept_tos",
-        origin  = "https://accounts.x.ai",
-        referer = "https://accounts.x.ai/accept-tos",
+        origin  = ACCOUNTS_ORIGIN,
+        referer = f"{ACCOUNTS_ORIGIN}/accept-tos",
     )
 
 
@@ -186,7 +191,11 @@ async def set_birth_date(
 
     if not shared:
         proxy = await get_proxy_runtime()
-        lease = await proxy.acquire(scope=ProxyScope.APP, kind=RequestKind.HTTP)
+        lease = await proxy.acquire(
+            scope=ProxyScope.APP,
+            kind=RequestKind.HTTP,
+            clearance_origin="https://grok.com",
+        )
 
     payload = orjson.dumps(build_set_birth_payload())
     try:
@@ -216,16 +225,19 @@ async def set_birth_date(
 
 
 async def nsfw_sequence(token: str) -> None:
-    """Run set_birth_date → enable_nsfw sharing one session + lease.
+    """Run accept_tos → set_birth_date → enable_nsfw.
 
-    Compared to calling the two functions individually this saves one TCP+TLS
-    handshake per token, which matters in high-concurrency batch scenarios.
+    accept_tos runs against accounts.x.ai with its own clearance. The grok.com
+    birth-date and NSFW update steps still share one session + lease.
     """
-    cfg       = get_config()
-    timeout_s = cfg.get_float("nsfw.timeout", 30.0)
+    await accept_tos(token)
 
     proxy = await get_proxy_runtime()
-    lease = await proxy.acquire(scope=ProxyScope.APP, kind=RequestKind.HTTP)
+    lease = await proxy.acquire(
+        scope=ProxyScope.APP,
+        kind=RequestKind.HTTP,
+        clearance_origin="https://grok.com",
+    )
 
     kwargs = build_session_kwargs(lease=lease)
     try:
