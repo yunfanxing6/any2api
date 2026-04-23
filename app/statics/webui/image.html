@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Any2API - Image Studio</title>
+  <link rel="icon" href="/favicon.ico?v={{APP_VERSION}}">
+  <link href="https://cdn.jsdelivr.net/npm/geist@1.0.0/dist/fonts/geist-sans/style.css" rel="stylesheet">
+  <link href="/static/css/app.css?v={{APP_VERSION}}" rel="stylesheet">
+  <style>
+    body { background:#f7f3ec; }
+    .studio-shell { min-height:calc(100vh - 110px); display:grid; grid-template-columns:240px minmax(0,1fr); gap:18px; padding:20px 24px 28px; }
+    .studio-sidebar, .studio-main-card { background:rgba(255,255,255,.88); border:1px solid rgba(229,220,208,.9); border-radius:28px; backdrop-filter:blur(18px); }
+    .studio-sidebar { padding:18px; display:flex; flex-direction:column; gap:14px; }
+    .studio-sidebar-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .studio-sidebar-title { font-size:14px; font-weight:700; color:#231815; }
+    .studio-new-btn { height:38px; padding:0 14px; border-radius:999px; border:0; background:#111; color:#fff; font-size:13px; font-weight:700; }
+    .studio-new-btn:hover { background:#222; }
+    .studio-session-list { display:flex; flex-direction:column; gap:8px; overflow:auto; }
+    .studio-session-item { width:100%; text-align:left; padding:12px 14px; border-radius:18px; border:1px solid transparent; background:#f6efe6; }
+    .studio-session-item:hover { border-color:#e6d9cc; background:#fbf7f1; }
+    .studio-session-item.active { background:#fff; border-color:#ddd0c1; box-shadow:0 10px 24px rgba(58,43,24,.08); }
+    .studio-session-title { font-size:13px; font-weight:700; color:#231815; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .studio-session-meta { margin-top:6px; font-size:11px; color:#8d7f73; display:flex; justify-content:space-between; gap:8px; }
+    .studio-main { min-width:0; }
+    .studio-main-card { padding:22px; display:flex; flex-direction:column; gap:18px; min-height:calc(100vh - 150px); }
+    .studio-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
+    .studio-title { font-size:24px; font-weight:800; color:#1b120a; }
+    .studio-sub { margin-top:6px; font-size:13px; color:#786d62; }
+    .studio-meta { display:flex; flex-wrap:wrap; gap:10px; justify-content:flex-end; }
+    .studio-pill { display:inline-flex; align-items:center; gap:6px; height:34px; padding:0 14px; border-radius:999px; background:#f6efe6; color:#6f645b; font-size:12px; font-weight:700; }
+    .studio-feed { flex:1; min-height:280px; overflow:auto; display:flex; flex-direction:column; gap:18px; padding-right:2px; }
+    .studio-empty { flex:1; display:grid; place-items:center; padding:24px; border:1px dashed #e6d9cc; border-radius:24px; background:linear-gradient(180deg, rgba(255,255,255,.62), rgba(248,241,233,.92)); }
+    .studio-empty-card { text-align:center; max-width:520px; }
+    .studio-empty-title { font-size:28px; font-weight:800; color:#1e1710; }
+    .studio-empty-text { margin-top:10px; font-size:14px; line-height:1.7; color:#7e7267; }
+    .studio-turn { border:1px solid #efe3d7; border-radius:24px; background:#fffdf9; padding:16px; }
+    .studio-turn-head { display:flex; justify-content:space-between; gap:14px; align-items:flex-start; }
+    .studio-turn-prompt { font-size:15px; font-weight:700; color:#261b12; white-space:pre-wrap; line-height:1.7; }
+    .studio-turn-tags { display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; }
+    .studio-tag { display:inline-flex; align-items:center; padding:5px 10px; border-radius:999px; background:#f6efe6; color:#7a6e63; font-size:11px; font-weight:700; }
+    .studio-ref-strip { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+    .studio-ref { position:relative; width:72px; height:72px; border-radius:18px; overflow:hidden; border:1px solid #eadfce; background:#f8f2ea; }
+    .studio-ref img { width:100%; height:100%; object-fit:cover; }
+    .studio-grid { margin-top:16px; display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:14px; }
+    .studio-image-card { border-radius:22px; overflow:hidden; background:#f6efe6; border:1px solid #eadfce; min-height:180px; position:relative; }
+    .studio-image-card img { width:100%; height:100%; object-fit:cover; display:block; }
+    .studio-image-card.error { display:grid; place-items:center; padding:18px; color:#a63b2d; font-size:12px; line-height:1.6; text-align:center; }
+    .studio-composer { border:1px solid #eadfce; border-radius:30px; background:#fff; padding:18px; box-shadow:0 16px 40px rgba(67,48,27,.06); }
+    .studio-refbar { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px; }
+    .studio-refchip { position:relative; width:72px; height:72px; border-radius:18px; overflow:hidden; border:1px solid #eadfce; background:#f8f2ea; }
+    .studio-refchip img { width:100%; height:100%; object-fit:cover; }
+    .studio-refchip-remove { position:absolute; top:6px; right:6px; width:20px; height:20px; border:0; border-radius:999px; background:rgba(17,17,17,.82); color:#fff; font-size:12px; }
+    .studio-textarea { width:100%; min-height:130px; border:0; resize:vertical; background:transparent; font:inherit; font-size:15px; line-height:1.7; color:#20150c; outline:none; }
+    .studio-toolbar { display:flex; flex-wrap:wrap; justify-content:space-between; gap:12px; margin-top:14px; }
+    .studio-toolbar-left, .studio-toolbar-right { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+    .studio-toggle { display:inline-flex; padding:4px; border-radius:999px; background:#f6efe6; }
+    .studio-toggle button { height:34px; padding:0 14px; border:0; border-radius:999px; background:transparent; font-size:13px; font-weight:700; color:#75695f; }
+    .studio-toggle button.active { background:#111; color:#fff; }
+    .studio-field { display:inline-flex; align-items:center; gap:8px; padding:0 12px; height:42px; border-radius:999px; background:#faf6f0; border:1px solid #eadfce; }
+    .studio-field label { font-size:12px; font-weight:700; color:#7b6e63; }
+    .studio-field select { border:0; background:transparent; font:inherit; color:#241b13; outline:none; min-width:96px; }
+    .studio-upload-btn, .studio-send-btn { height:44px; border-radius:999px; border:0; padding:0 16px; font-size:13px; font-weight:700; }
+    .studio-upload-btn { background:#f6efe6; color:#4f4339; }
+    .studio-send-btn { background:#111; color:#fff; min-width:112px; }
+    .studio-send-btn:disabled { opacity:.45; cursor:not-allowed; }
+    @media (max-width: 960px) {
+      .studio-shell { grid-template-columns:1fr; padding:16px; }
+      .studio-sidebar { order:2; }
+      .studio-main-card { min-height:auto; }
+    }
+  </style>
+</head>
+<body class="webui-page">
+  <div id="webui-header" data-active="/webui/image"></div>
+  <main class="studio-shell">
+    <aside class="studio-sidebar">
+      <div class="studio-sidebar-head">
+        <div class="studio-sidebar-title">Image Sessions</div>
+        <button id="newConversationBtn" class="studio-new-btn" type="button">新建</button>
+      </div>
+      <div id="sessionList" class="studio-session-list"></div>
+    </aside>
+
+    <section class="studio-main">
+      <div class="studio-main-card">
+        <div class="studio-head">
+          <div>
+            <div class="studio-title">Image Studio</div>
+            <div class="studio-sub">基于 chatgpt2api 画图页交互，直接接 Any2API 的统一图片模型与编辑接口。</div>
+          </div>
+          <div class="studio-meta">
+            <div class="studio-pill" id="statusPill">ready</div>
+            <div class="studio-pill" id="modelSummaryPill">models: loading</div>
+          </div>
+        </div>
+
+        <div id="feed" class="studio-feed">
+          <div id="emptyState" class="studio-empty">
+            <div class="studio-empty-card">
+              <div class="studio-empty-title">Turn ideas into images</div>
+              <div class="studio-empty-text">支持 Grok、Qwen、ChatGPT2API 的统一图片模型。可文生图，也可上传参考图后图生图。</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="studio-composer">
+          <input id="referenceInput" type="file" accept="image/*" multiple hidden>
+          <div id="referenceBar" class="studio-refbar"></div>
+          <textarea id="promptInput" class="studio-textarea" placeholder="输入你想生成的画面；图生图时先上传参考图，再描述修改目标"></textarea>
+          <div class="studio-toolbar">
+            <div class="studio-toolbar-left">
+              <div id="modeToggle" class="studio-toggle">
+                <button type="button" data-mode="generate" class="active">文生图</button>
+                <button type="button" data-mode="edit">图生图</button>
+              </div>
+              <div class="studio-field">
+                <label for="modelSelect">模型</label>
+                <select id="modelSelect"></select>
+              </div>
+              <div class="studio-field">
+                <label for="countSelect">张数</label>
+                <select id="countSelect">
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                </select>
+              </div>
+            </div>
+            <div class="studio-toolbar-right">
+              <button id="uploadBtn" type="button" class="studio-upload-btn">上传参考图</button>
+              <button id="sendBtn" type="button" class="studio-send-btn">生成</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/js/i18n.js?v={{APP_VERSION}}"></script>
+  <script src="/static/js/auth.js?v={{APP_VERSION}}"></script>
+  <script src="/static/js/toast.js?v={{APP_VERSION}}"></script>
+  <script src="/static/js/webui-header.js?v={{APP_VERSION}}"></script>
+  <script src="/static/js/footer.js?v={{APP_VERSION}}"></script>
+  <script src="/static/js/webui/image-studio.js?v={{APP_VERSION}}"></script>
+</body>
+</html>
