@@ -18,11 +18,12 @@
           <span>Grok2API</span>
         </a>
       </div>
-      <div class="login-title" data-i18n="login.webuiTitle">WebUI</div>
-      <div class="login-subtitle" data-i18n="login.webuiSubtitle">请输入访问密钥</div>
+      <div class="login-title">WebUI</div>
+      <div class="login-subtitle">请输入登录邮箱和密码</div>
       <div class="login-form">
-        <input type="password" id="key" placeholder="访问密钥" data-i18n-placeholder="login.webuiPlaceholder" class="input" style="height:32px;font-size:12px">
-        <button onclick="login()" class="btn btn-primary w-full" style="font-size:12px" data-i18n="login.enter">进入</button>
+        <input type="email" id="email" placeholder="登录邮箱" class="input" style="height:32px;font-size:12px">
+        <input type="password" id="password" placeholder="登录密码" class="input" style="height:32px;font-size:12px">
+        <button onclick="login()" class="btn btn-primary w-full" style="font-size:12px">进入</button>
       </div>
     </div>
   </div>
@@ -31,24 +32,39 @@
   <script src="/static/js/toast.js?v={{APP_VERSION}}"></script>
   <script src="/static/js/footer.js?v={{APP_VERSION}}"></script>
   <script>
-    const el = document.getElementById('key');
-    el.addEventListener('keypress', e => { if (e.key === 'Enter') login(); });
+    const emailEl = document.getElementById('email');
+    const passwordEl = document.getElementById('password');
+    [emailEl, passwordEl].forEach((el) => {
+      el.addEventListener('keypress', e => { if (e.key === 'Enter') login(); });
+    });
     const VERIFY = WEBUI_API+'/verify';
+    const LOGIN = WEBUI_API+'/login';
 
     async function login() {
-      const key = el.value.trim();
       try {
-        if (await verifyKey(VERIFY, key)) { await webuiKey.set(key); location.href='/webui/chat'; }
-        else showToast(t('common.invalidKey'), 'error');
-      } catch { showToast(t('common.connectionFailed'), 'error'); }
+        const email = emailEl.value.trim();
+        const password = passwordEl.value;
+        const res = await fetch(LOGIN, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(payload.detail || payload.error || '登录失败');
+        const token = String(payload.token || '').trim();
+        if (!token) throw new Error('登录成功但未返回访问令牌');
+        await webuiKey.set(token);
+        location.href='/webui/image';
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : t('common.connectionFailed'), 'error');
+      }
     }
 
     (async () => {
       try {
         const stored = await webuiKey.get();
-        if (stored && await verifyKey(VERIFY, stored)) { location.href='/webui/chat'; return; }
+        if (stored && await verifyKey(VERIFY, stored)) { location.href='/webui/image'; return; }
         if (stored) webuiKey.clear();
-        if (await verifyKey(VERIFY, '')) location.href='/webui/chat';
       } catch {}
       await renderSiteFooter?.();
     })();

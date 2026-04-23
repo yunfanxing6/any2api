@@ -35,6 +35,25 @@ def get_webui_key() -> str:
     return str(get_config("app.webui_key", "") or "")
 
 
+def get_webui_email() -> str:
+    """Return configured ``app.webui_email``."""
+    return str(get_config("app.webui_email", "") or "")
+
+
+def get_webui_password() -> str:
+    """Return configured ``app.webui_password``."""
+    return str(get_config("app.webui_password", "") or "")
+
+
+def get_effective_webui_token() -> str:
+    """Return the bearer token accepted for WebUI APIs."""
+    return get_webui_key() or get_admin_key()
+
+
+def has_webui_credentials() -> bool:
+    return bool(get_webui_email().strip() and get_webui_password())
+
+
 def get_internal_key() -> str:
     """Return configured ``app.internal_api_key`` (service-to-service access key)."""
     return str(get_config("app.internal_api_key", "") or "")
@@ -114,7 +133,7 @@ async def verify_webui_key(
     authorization: str | None = Header(default=None),
 ) -> None:
     """Validate Bearer token for webui endpoints."""
-    webui_key = get_webui_key()
+    webui_key = get_effective_webui_token()
 
     if not webui_key:
         if is_webui_enabled():
@@ -219,6 +238,10 @@ __all__ = [
     "verify_internal_key",
     "get_admin_key",
     "get_webui_key",
+    "get_webui_email",
+    "get_webui_password",
+    "get_effective_webui_token",
+    "has_webui_credentials",
     "get_internal_key",
     "is_webui_enabled",
 ]

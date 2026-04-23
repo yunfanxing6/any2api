@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter
 
+from .auth import router as auth_router
 from .chat import router as chat_router
 from .images import router as images_router
 from .imagine import router as imagine_router
@@ -9,6 +10,7 @@ from .pages import router as pages_router
 from .voice import router as voice_router
 
 router = APIRouter()
+router.include_router(auth_router)
 router.include_router(chat_router)
 router.include_router(images_router)
 router.include_router(imagine_router, prefix="/webui/api")

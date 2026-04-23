@@ -338,6 +338,8 @@ const SCHEMA_DEF = [
           { key: 'app_key', label: 'APP 访问密码', labelKey: 'config.schema.fields.appKey.label', type: 'password', desc: '管理后台鉴权密码。修改后已有 Session 将立即失效，需重新登录。', descKey: 'config.schema.fields.appKey.desc', rand: true },
           { key: 'api_key', label: 'API 调用密钥', labelKey: 'config.schema.fields.apiKey.label', type: 'text', desc: 'OpenAI 兼容 API 的鉴权密钥。多个值请使用英文逗号分隔；留空则禁用鉴权。', descKey: 'config.schema.fields.apiKey.desc', rand: true },
           { key: 'webui_enabled', label: '启用 WebUI', labelKey: 'config.schema.fields.webuiEnabled.label', type: 'bool', desc: '开放 WebUI 功能入口。关闭后相关路由将返回 404。', descKey: 'config.schema.fields.webuiEnabled.desc' },
+          { key: 'webui_email', label: 'WebUI 登录邮箱', type: 'text', desc: 'WebUI 登录邮箱。配置后登录页将改为邮箱+密码模式。', showIf: 'app.webui_enabled' },
+          { key: 'webui_password', label: 'WebUI 登录密码', type: 'password', desc: 'WebUI 登录密码。与邮箱配对使用，不写入文档。', showIf: 'app.webui_enabled' },
           { key: 'webui_key', label: 'WebUI 访问密码', labelKey: 'config.schema.fields.webuiKey.label', type: 'password', desc: 'WebUI 的访问鉴权密码。配置后访问时必须提供。', descKey: 'config.schema.fields.webuiKey.desc', rand: true, showIf: 'app.webui_enabled' },
         ]
       },
