@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 
 from app.control.model import registry as model_registry
 from app.platform.auth.middleware import verify_webui_key
+from app.providers import is_chatgpt_model_name
 from app.products.openai.router import chat_completions_endpoint
 from app.products.openai.schemas import ChatCompletionRequest
 
@@ -27,7 +28,7 @@ def _model_owner(model_name: str) -> str:
     lowered = str(model_name or "").strip().lower()
     if lowered.startswith("qwen"):
         return "qwen"
-    if lowered.startswith("gpt-image-"):
+    if is_chatgpt_model_name(lowered):
         return "chatgpt2api"
     return "xai"
 

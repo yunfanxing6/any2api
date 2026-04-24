@@ -23,6 +23,16 @@ MODELS: tuple[ModelSpec, ...] = (
     ModelSpec("qwen3.5-flash",                          ModeId.FAST,   Tier.BASIC, Capability.CHAT,       True, "Qwen 3.5 Flash"),
     ModelSpec("qwen3.5-omni-plus",                      ModeId.AUTO,   Tier.BASIC, Capability.CHAT,       True, "Qwen 3.5 Omni Plus"),
 
+    # ChatGPT2API text/chat
+    ModelSpec("auto",                                   ModeId.AUTO,   Tier.BASIC, Capability.CHAT,       True, "ChatGPT Auto"),
+    ModelSpec("gpt-5",                                  ModeId.AUTO,   Tier.BASIC, Capability.CHAT,       True, "GPT-5"),
+    ModelSpec("gpt-5-1",                                ModeId.AUTO,   Tier.BASIC, Capability.CHAT,       True, "GPT-5.1"),
+    ModelSpec("gpt-5-2",                                ModeId.AUTO,   Tier.BASIC, Capability.CHAT,       True, "GPT-5.2"),
+    ModelSpec("gpt-5-3",                                ModeId.AUTO,   Tier.BASIC, Capability.CHAT,       True, "GPT-5.3"),
+    ModelSpec("gpt-5-3-mini",                           ModeId.AUTO,   Tier.BASIC, Capability.CHAT,       True, "GPT-5.3 Mini"),
+    ModelSpec("gpt-5-mini",                             ModeId.AUTO,   Tier.BASIC, Capability.CHAT,       True, "GPT-5 Mini"),
+    ModelSpec("gpt-5.4",                                ModeId.AUTO,   Tier.BASIC, Capability.CHAT,       True, "GPT-5.4"),
+
     # Basic+
     ModelSpec("grok-4.20-0309-non-reasoning",           ModeId.FAST,   Tier.BASIC, Capability.CHAT,       True, "Grok 4.20 0309 Non-Reasoning"),
     ModelSpec("grok-4.20-0309",                         ModeId.AUTO,   Tier.BASIC, Capability.CHAT,       True, "Grok 4.20 0309"),
@@ -43,6 +53,7 @@ MODELS: tuple[ModelSpec, ...] = (
     ModelSpec("grok-imagine-image-lite",                ModeId.FAST,   Tier.BASIC, Capability.IMAGE,      True, "Grok Imagine Image Lite"),
     ModelSpec("gpt-image-1",                            ModeId.AUTO,   Tier.BASIC, Capability.IMAGE,      True, "ChatGPT Image 1"),
     ModelSpec("gpt-image-2",                            ModeId.AUTO,   Tier.BASIC, Capability.IMAGE,      True, "ChatGPT Image 2"),
+    ModelSpec("codex-gpt-image-2",                      ModeId.AUTO,   Tier.BASIC, Capability.IMAGE,      True, "Codex GPT Image 2"),
     # Super+
     ModelSpec("grok-imagine-image",                     ModeId.AUTO,   Tier.SUPER, Capability.IMAGE,      True, "Grok Imagine Image"),
     ModelSpec("grok-imagine-image-pro",                 ModeId.AUTO,   Tier.SUPER, Capability.IMAGE,      True, "Grok Imagine Image Pro"),

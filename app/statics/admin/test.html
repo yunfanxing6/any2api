@@ -87,13 +87,23 @@ const CHAT_FALLBACK_MODELS = [
   'qwen3.5-plus:fast',
   'qwen3.5-plus:thinking',
   'qwen3.5-omni-plus',
+  'auto',
+  'gpt-5',
+  'gpt-5-1',
+  'gpt-5-2',
+  'gpt-5-3',
+  'gpt-5-3-mini',
+  'gpt-5-mini',
+  'gpt-5.4',
   'gpt-image-1',
   'gpt-image-2',
+  'codex-gpt-image-2',
 ];
 const IMAGE_FALLBACK_MODELS = [
   'grok-imagine-image-lite',
   'gpt-image-1',
   'gpt-image-2',
+  'codex-gpt-image-2',
   'qwen3.6-plus',
   'qwen-image',
   'qwen-image-plus',
@@ -117,7 +127,8 @@ function isQwenModel(model) {
   return String(model || '').trim().toLowerCase().startsWith('qwen');
 }
 function isChatgptImageModel(model) {
-  return String(model || '').trim().toLowerCase().startsWith('gpt-image-');
+  const lowered = String(model || '').trim().toLowerCase();
+  return lowered.startsWith('gpt-image-') || lowered.startsWith('codex-gpt-image-');
 }
 function classifyModel(model) {
   const lowered = String(model || '').trim().toLowerCase();

@@ -1,15 +1,22 @@
 from app.control.model import registry as model_registry
 from app.platform.auth.key_registry import ALL_PROVIDERS, _normalize_multi
 from app.platform.auth.middleware import _infer_provider_from_model
-from app.providers.chatgpt2api import is_chatgpt_model_name
+from app.providers.chatgpt2api import _normalize_chatgpt_model_ids, is_chatgpt_model_name
 
 
 def test_chatgpt_models_are_registered_and_detected():
-    spec = model_registry.get("gpt-image-1")
-    assert spec is not None
-    assert spec.is_image()
-    assert is_chatgpt_model_name("gpt-image-1") is True
-    assert _infer_provider_from_model("gpt-image-1") == "chatgpt2api"
+    for model_name in ("gpt-image-1", "gpt-image-2", "codex-gpt-image-2", "auto", "gpt-5-3", "gpt-5-mini", "gpt-5.4"):
+        assert model_registry.get(model_name) is not None
+        assert is_chatgpt_model_name(model_name) is True
+        assert _infer_provider_from_model(model_name) == "chatgpt2api"
+
+
+def test_chatgpt_model_list_keeps_legacy_image_aliases():
+    assert _normalize_chatgpt_model_ids(["gpt-image-2", "codex-gpt-image-2"]) == (
+        "gpt-image-2",
+        "codex-gpt-image-2",
+        "gpt-image-1",
+    )
 
 
 def test_chatgpt_provider_is_exposed_in_global_key_registry():

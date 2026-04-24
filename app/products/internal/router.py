@@ -12,6 +12,7 @@ from app.control.model import registry as model_registry
 from app.control.model.enums import Capability
 from app.platform.auth.middleware import verify_internal_key
 from app.platform.meta import get_project_version
+from app.providers import is_chatgpt_model_name
 
 router = APIRouter(prefix="/internal", dependencies=[Depends(verify_internal_key)])
 _TAG_INTERNAL = "Internal - Sync"
@@ -21,7 +22,7 @@ def _detect_provider(model_name: str) -> str:
     lowered = model_name.lower()
     if lowered.startswith("qwen"):
         return "qwen"
-    if lowered.startswith("gpt-image-"):
+    if is_chatgpt_model_name(lowered):
         return "chatgpt2api"
     if lowered.startswith("grok"):
         return "grok"

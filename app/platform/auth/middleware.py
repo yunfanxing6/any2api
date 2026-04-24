@@ -7,6 +7,7 @@ from fastapi import Header, HTTPException, Query, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.platform.config.snapshot import get_config
+from app.providers.chatgpt2api import is_chatgpt_model_name
 from .key_registry import registry
 
 _security = HTTPBearer(auto_error=False, scheme_name="API Key")
@@ -177,7 +178,7 @@ def _infer_provider_from_model(model: str | None) -> str | None:
         return "grok"
     if lowered.startswith("qwen"):
         return "qwen"
-    if lowered.startswith("gpt-image-"):
+    if is_chatgpt_model_name(lowered):
         return "chatgpt2api"
 
     aliases = get_config("providers.qwen.model_aliases", {})

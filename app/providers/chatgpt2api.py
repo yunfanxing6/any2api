@@ -14,10 +14,28 @@ from app.platform.config.snapshot import get_config
 from app.platform.logging.logger import logger
 
 _MODELS_CACHE_TTL = 30.0
+_CHATGPT_IMAGE_MODELS = {"gpt-image", "gpt-image-1", "gpt-image-2", "codex-gpt-image-2"}
+_CHATGPT_TEXT_MODELS = {"auto"}
 
 
 def is_chatgpt_model_name(model_name: str) -> bool:
-    return (model_name or "").strip().lower().startswith("gpt-image-")
+    lowered = (model_name or "").strip().lower()
+    return bool(lowered and (lowered in _CHATGPT_IMAGE_MODELS or lowered in _CHATGPT_TEXT_MODELS or lowered.startswith("gpt-5")))
+
+
+def _normalize_chatgpt_model_ids(model_ids: list[str]) -> tuple[str, ...]:
+    normalized: list[str] = []
+    for model_id in model_ids:
+        candidate = str(model_id or "").strip()
+        if candidate and candidate not in normalized:
+            normalized.append(candidate)
+
+    if {"gpt-image", "gpt-image-1", "gpt-image-2"} & set(normalized):
+        for alias in ("gpt-image-1", "gpt-image-2"):
+            if alias not in normalized:
+                normalized.append(alias)
+
+    return tuple(normalized)
 
 
 def _chatgpt2api_settings_from_config() -> dict[str, Any]:
@@ -146,7 +164,7 @@ class ChatGPT2APIProvider:
                 if model_id and model_id not in model_ids:
                     model_ids.append(model_id)
 
-        self._models_cache = tuple(model_ids)
+        self._models_cache = _normalize_chatgpt_model_ids(model_ids)
         self._models_fetched_at = now
         return self._models_cache
 
@@ -227,5 +245,6 @@ __all__ = [
     "ChatGPT2APIProvider",
     "create_chatgpt2api_provider",
     "is_chatgpt_model_name",
+    "_normalize_chatgpt_model_ids",
     "_chatgpt2api_settings_from_config",
 ]
